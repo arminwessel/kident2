@@ -50,7 +50,8 @@ class MoveRobot():
 if __name__ == "__main__":
     rospy.init_node('move_iiwa')
     mover = MoveRobot("/home/armin/catkin_ws/src/kident2/src/traj.csv")
-    rate = rospy.Rate(1) # rate of publishing in Hz
+    # rate = rospy.Rate(1) # rate of publishing in Hz
+    _msg = rospy.wait_for_message("iiwa_q", Array_f64) # wait for iiwa handler to publish first message
     while not rospy.is_shutdown():
         mover.send_message()
-        rate.sleep()
+        rospy.sleep(0.3)
