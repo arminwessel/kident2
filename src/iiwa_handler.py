@@ -28,15 +28,25 @@ class IiwaHandler():
 
         self.pub_q=rospy.Publisher("iiwa_q", Array_f64, queue_size=20)
         self.serv_q = rospy.Service('get_q_interp', Get_q, self.get_q_interpolated)
+        self.sub_q_desired = rospy.Subscriber("q_desired", Array_f64, self.move_jointspace)
 
         self.qs = deque(maxlen=100)
 
     def readout_q(self) -> None:
+        """
+        Read raw joint data from iiwa.model
+        """
         q_raw = self.iiwa.model.get_q()
         t = rospy.get_time()
         self.qs.append((q_raw,t))
 
-    def get_q_interpolated(self,req):
+    def get_q_interpolated(self,req) -> Get_qResponse:
+        """
+        Implementation of Service "Get_q":
+        Receives a float time. Find the readout values 
+        before and after requested time. Interpolate for 
+        each q and return interpolated values 
+        """
         # initialize response
         resp = Get_qResponse()
 
@@ -70,19 +80,33 @@ class IiwaHandler():
         return resp
 
 
-    def publish_q(self):
+    def publish_q(self) -> None:
+        """
+        Publish the newest value from stored q readouts
+        """
         msg = Array_f64()
         msg.data, msg.time = self.qs[-1] # publish newest element
         self.pub_q.publish(msg)
 
+    def move_jointspace(self, msg):
+        q_desired = list(msg.data)
+        time_desired = msg.time
+        t0 = self.iiwa.get_time()
+        self.iiwa.move_jointspace(q_desired, t0, time_desired-t0)
+    
 
-
+    def release_udp_socket(self):
+        try:
+            self.iiwa.udp_socket.close()
+        except:
+            rospy.logerr("could not close udp socket")
 
 
 # Node
 if __name__ == "__main__":
     rospy.init_node('iiwa_handler')
     handler = IiwaHandler()
+    rospy.on_shutdown(handler.release_udp_socket)
 
     rate = rospy.Rate(10) # rate of readout
     while not rospy.is_shutdown():
@@ -102,3 +126,4 @@ if __name__ == "__main__":
         handler.readout_q()
         handler.publish_q() # publish q on every fourth passing
         rate.sleep()
+
