@@ -15,15 +15,19 @@ class MoveRobot():
     After reaching an end of the trajectory, the direction is reversed
     """
 
-    def __init__(self, trajectory_csv) -> None:
-        try:
-            df = pd.read_csv(trajectory_csv)
-        except:
-            rospy.logerr("Could not load trajectory from {}".format(trajectory_csv))
-        self.traj=df.to_numpy() # shape: (num_joints, num_traj_points)
+    def __init__(self, mode, traj=None) -> None:
         self.pub =  rospy.Publisher("q_desired",Array_f64,queue_size=2)
         self.k = 0
         self.forward=True
+        if mode=="csv":
+            try:
+                df = pd.read_csv(traj)
+            except:
+                rospy.logerr("Could not load trajectory from {}".format(traj))
+            self.traj=df.to_numpy() # shape: (num_joints, num_traj_points)
+        else:
+            a=10/180*np.pi
+            self.traj=np.array([[0,a],[0,a],[0,a],[0,a],[0,a],[0,a],[0,a]])
 
 
     def send_message(self) -> None:
@@ -49,9 +53,13 @@ class MoveRobot():
 # Node
 if __name__ == "__main__":
     rospy.init_node('move_iiwa')
-    mover = MoveRobot("/home/armin/catkin_ws/src/kident2/src/traj.csv")
+
+    mover = MoveRobot(mode='csv', traj="/home/armin/catkin_ws/src/kident2/src/traj.csv")
     # rate = rospy.Rate(1) # rate of publishing in Hz
+
+    #mover = MoveRobot(mode='tri')
     _msg = rospy.wait_for_message("iiwa_q", Array_f64) # wait for iiwa handler to publish first message
+    rospy.sleep(1)
     while not rospy.is_shutdown():
         mover.send_message()
-        rospy.sleep(0.3)
+        rospy.sleep(0.03)

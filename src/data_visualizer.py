@@ -59,14 +59,16 @@ class DataVisualizer():
     def update_traj_data(self, msg):
         traj_k =  msg.data
         traj_k = np.reshape(np.array(traj_k),(-1,1))
-        self.traj_vals = np.hstack((self.traj_vals,traj_k))
         self.traj_t = np.append(self.traj_t,msg.time)
+        self.traj_vals = np.hstack((self.traj_vals,traj_k))
+        
 
     def update_traj_des_data(self, msg):
         traj_k =  msg.data
         traj_k = np.reshape(np.array(traj_k),(-1,1))
-        self.traj_des_vals = np.hstack((self.traj_des_vals,traj_k))
         self.traj_des_t = np.append(self.traj_des_t,msg.time)
+        self.traj_des_vals = np.hstack((self.traj_des_vals,traj_k))
+        
 
             
 
@@ -118,14 +120,16 @@ class DataVisualizer():
         axis=self.ax_traj
         traj=self.traj_vals
         traj_des=self.traj_des_vals
-        axis.clear()
         X = self.traj_t
+        X_des = self.traj_des_t
+        axis.clear()
+        
         for i in range(n): 
             axis.plot(X,traj[i,:].flatten(), color=colors[i],   label=str(i))
 
-        X = self.traj_des_t
+
         for i in range(n): 
-            axis.plot(X,traj_des[i,:].flatten(), color=colors[i], linestyle='dashed',  label='des'+str(i))
+            axis.plot(X_des,traj_des[i,:].flatten(), color=colors[i], linestyle='dashed',  label='des'+str(i))
 
         axis.set_title(r'$\theta$ trajectories')
         axis.legend()
