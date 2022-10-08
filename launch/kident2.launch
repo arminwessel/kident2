@@ -18,6 +18,7 @@
 <!--Gazebo-->
   <include file="$(find arc_gazebo)/launch/KukaLbrIiwa/iiwa_armin.launch">
     <arg name="gui" value="$(arg gui)" />
+    <arg name="rviz" value="true" />
   </include>
   
 

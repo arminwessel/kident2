@@ -10,13 +10,11 @@ import utils
 #from std_srvs.srv import SetBool, SetBoolResponse
 #import utils
 
-class ParameterEstimator():
+class ParameterEstimator:
     """
     Estimate the kinematic model error of a robot manipulator
     The model is based on the DH convention
     """
-
-
     def __init__(self) -> None:
         """
         Constructor
@@ -25,18 +23,19 @@ class ParameterEstimator():
         self.pub_est = rospy.Publisher("est", Array_f64, queue_size=20)
 
         # nominal DH parameters
-          # nominal theta parameters are joint coors
+        # nominal theta parameters are joint coors
         # self.theta_nom=np.array([0,np.pi,np.pi,0,np.pi/2,0,np.pi/2])
-        # self.d_nom=np.array([0.1525,0.2025,0.2325,0.1825,0.2175,0.1825,0.081])
+        # self.d_nom=np.array([0.1575,0.2025,0.2375,0.1825,0.2175,0.1825,0.171])
         # self.a_nom=np.array([0,0,0,0,0,0,0])
         # self.alpha_nom=np.array([0,np.pi/2,-np.pi/2,np.pi/2,np.pi/2,np.pi/2,-np.pi/2])
 
-        # self.theta_nom =np.array([0,     0, 0,     0, 0,   0, 0    ])
-        self.theta_nom =np.array([0,     0, 0,     0, 0,   0, 0    ])
-        self.a_nom     =np.array([0.355, 0, 0.415, 0, 0.4, 0, 0.236])
-        self.d_nom     =np.array([0,     0, 0,     0, 0,   0, 0    ])
-        pip2 = np.pi/2
-        self.alpha_nom =np.array([0, pip2, -pip2, -pip2, pip2, pip2, -pip2])
+        pip2 = np.pi / 2
+        self.theta_nom = np.array([0, np.pi, np.pi, 0, pip2, 0, pip2])
+        # self.a_nom     =np.array([0.36, 0, 0.42, 0, 0.4, 0, 0.171])
+        # self.d_nom     =np.array([0,     0, 0,     0, 0,   0, 0    ])
+        self.d_nom = np.array([0.1575,0.2025,0.2375,0.1825,0.2175,0.1825,0.171])
+        self.a_nom = np.array([0, 0, 0, 0, 0, 0, 0])
+        self.alpha_nom = np.array([0, pip2, -pip2, pip2, pip2, pip2, -pip2])
 
         num_links = self.theta_nom.size
         self.rls=RLS(4*num_links,1) 
@@ -68,7 +67,7 @@ class ParameterEstimator():
         """
         Get the parameter jacobian, that is the matrix approximating the effect of parameter (DH)
         deviations on the final pose. The number of links is inferred from the lenght of the DH 
-        parameter vecors. All joints are assumed rotational.
+        parameter vectors. All joints are assumed rotational.
         """
         assert theta_all.size == d_all.size == a_all.size == alpha_all.size, "All parameter vectors must have same length"
         num_links = theta_all.size
@@ -114,13 +113,13 @@ class ParameterEstimator():
         # parameters and forward kinematics
         try:
             num_links = (np.array(m.q1)).size
-            theta_nom1 = np.array(m.q1)
+            theta_nom1 = np.array(m.q1)+self.theta_nom
             T_nom1 = self.get_T__i0(num_links,theta_nom1, self.d_nom, self.a_nom, self.alpha_nom)
             tvec_nom1 = T_nom1[0:3,3].reshape((3,1))
             rvec_nom1 = cv2.Rodrigues(T_nom1[0:3,0:3])[0]
 
 
-            theta_nom2 = np.array(m.q2)
+            theta_nom2 = np.array(m.q2)+self.theta_nom
             T_nom2 = self.get_T__i0(num_links,theta_nom2, self.d_nom, self.a_nom, self.alpha_nom)
             tvec_nom2 = T_nom2[0:3,3].reshape((3,1))
             rvec_nom2 = cv2.Rodrigues(T_nom2[0:3,0:3])[0]
@@ -160,7 +159,7 @@ class RLS():
         """
         num_params: number of parameters to be estimated
         q: forgetting factor, usually very close to 1.
-        alpha: initial value on idagonal of P
+        alpha: initial value on diagonal of P
         """
         assert q <= 1 and q > 0.95, "q usually needs to be from ]0.95, 1]"
         self.q = q
