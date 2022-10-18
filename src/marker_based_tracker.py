@@ -143,6 +143,7 @@ class MarkerBasedTracker:
         H1i, H2i = np.linalg.inv(H1), np.linalg.inv(H2)
         test = H1i[0:3, 3]
         test2 = H2i[0:3, 3]
+        dH = np.array(H1i-H2i).flatten()
         dtvec = np.reshape(H1i[0:3, 3] - H2i[0:3, 3], (3, 1))
         drvec = cv2.Rodrigues(H1i[0:3, 0:3])[0] - cv2.Rodrigues(H2i[0:3, 0:3])[0]
 
@@ -161,6 +162,7 @@ class MarkerBasedTracker:
 
         m = DiffMeasurement()
         m.type = "marker"  # measurement based on marker as opposed to laser tracker
+        m.dtrans = dH
         m.dtvec = dtvec.flatten().tolist()
         m.drvec = drvec.flatten().tolist()
         m.q1 = list(obs1["q"])

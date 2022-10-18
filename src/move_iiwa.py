@@ -26,11 +26,11 @@ class MoveRobot:
             self.traj = df.to_numpy()  # shape: (num_joints, num_traj_points)
             self.traj = self.traj[:, 1:]  # delete header
             # move certain joints only
-            self.traj[0, :] = np.zeros(5000)
-            self.traj[1, :] = np.zeros(5000)
-            self.traj[2, :] = np.zeros(5000)
-            self.traj[3, :] = np.zeros(5000)
-            self.traj[4, :] = np.zeros(5000)
+            # self.traj[0, :] = np.zeros(5000)
+            # self.traj[1, :] = np.zeros(5000)
+            # self.traj[2, :] = np.zeros(5000)
+            # self.traj[3, :] = np.zeros(5000)
+            # self.traj[4, :] = np.zeros(5000)
             # self.traj[5, :] = np.zeros(5000)
             # self.traj[6, :] = np.zeros(5000)
         else:

@@ -11,14 +11,11 @@
 <!--Nodes-->
   <node name="move_iiwa_node" pkg="kident2" type="move_iiwa.py" />
   <node name="iiwa_handler_node" pkg="kident2" type="iiwa_handler.py"/>
-  <node name="marker_tracker_node" pkg="kident2" type="marker_based_tracker.py"/>
-  <!--<node name="param_estimator_node" pkg="kident2" type="parameter_estimator.py" />-->
-  <!--<node name="data_visualizer_node" pkg="kident2" type="data_visualizer.py" />-->
+  <node name="input_capture_node" pkg="kident2" type="input_data_capture.py"/>
   
 <!--Gazebo-->
   <include file="$(find arc_gazebo)/launch/KukaLbrIiwa/iiwa_armin.launch">
     <arg name="gui" value="$(arg gui)" />
-    <arg name="rviz" value="true" />
   </include>
   
 

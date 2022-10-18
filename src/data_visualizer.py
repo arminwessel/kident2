@@ -26,7 +26,7 @@ class DataVisualizer:
         self.num_links = num_links
         self.num_params = 4*num_links
 
-        self.est_vals = np.empty((num_links*4, 0))
+        self.est_vals = np.empty((num_links*4+6, 0))
         self.est_t = np.empty((0,))
         self.traj_vals = np.empty((num_links, 0))
         self.traj_t = np.empty((0,))

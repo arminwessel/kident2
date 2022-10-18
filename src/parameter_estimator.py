@@ -33,12 +33,14 @@ class ParameterEstimator:
         self.theta_nom = np.array([0, np.pi, np.pi, 0, pip2, 0, pip2])
         # self.a_nom     =np.array([0.36, 0, 0.42, 0, 0.4, 0, 0.171])
         # self.d_nom     =np.array([0,     0, 0,     0, 0,   0, 0    ])
-        self.d_nom = np.array([0.1575,0.2025,0.2375,0.1825,0.2175,0.1825,0.171])
+        self.d_nom = np.array([0.1575,0.2025,0.2375,0.1825,0.2175,0.1825,0.081])
         self.a_nom = np.array([0, 0, 0, 0, 0, 0, 0])
         self.alpha_nom = np.array([0, pip2, -pip2, pip2, pip2, pip2, -pip2])
 
+
+
         num_links = self.theta_nom.size
-        self.rls=RLS(4*num_links,1) 
+        self.rls=RLS(4*num_links + 6,1)
         self.distances=np.zeros((0,))
 
 
@@ -131,14 +133,24 @@ class ParameterEstimator:
             rospy.logerr("process_measurement: nominal calc failed: {}".format(e))
             return
 
-        # calculate the error between th expected and measured pose differenced
+        # calculate the error between the expected and measured pose differences
         dtvec_real, drvec_real = np.reshape(np.array(m.dtvec),(3,1)), np.reshape(np.array(m.drvec),(3,1))
         current_error=np.concatenate((dtvec_real-dtvec_nom,drvec_real-drvec_nom),axis=0)
+
+        # calculate error in transformation matrix
+        dT_nom = T_nom1-T_nom2
+
+        # difference in transformation
+        dH = m.dtrans
+
+        # matrix vectorization
 
         # calculate the corresponding difference jacobian
         jacobian1 = self.get_parameter_jacobian(theta_nom1, self.d_nom, self.a_nom, self.alpha_nom)
         jacobian2 = self.get_parameter_jacobian(theta_nom2, self.d_nom, self.a_nom, self.alpha_nom)
         jacobian = jacobian1-jacobian2
+
+        jacobian = np.concatenate((jacobian, np.eye(6)),1)
 
         try:
             # use RLS
