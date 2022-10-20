@@ -33,9 +33,19 @@ class MoveRobot:
             self.traj[4, :] = np.zeros(5000)
             # self.traj[5, :] = np.zeros(5000)
             # self.traj[6, :] = np.zeros(5000)
-        else:
+        elif mode == "tri":
             a = 10 / 180 * np.pi
             self.traj = np.array([[0, a], [0, a], [0, a], [0, a], [0, a], [0, a], [0, a]])
+
+    def move_random(self):
+        q = (np.random.rand(7) - np.full((7,), 0.5)) * np.pi / 2
+        # create instance and populate
+        msg = Array_f64()
+        msg.data = q
+        msg.time = rospy.get_time()
+
+        # publish to topic
+        self.pub.publish(msg)
 
     def send_message(self) -> None:
         # create instance and populate with values
@@ -70,5 +80,5 @@ if __name__ == "__main__":
     # _msg = rospy.wait_for_message("iiwa_q", Array_f64) # wait for iiwa handler to publish first message
     rospy.sleep(0.1)
     while not rospy.is_shutdown():
-        mover.send_message()
-        rospy.sleep(1 / 30)
+        mover.move_random()
+        rospy.sleep(1)

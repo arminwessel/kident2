@@ -6,15 +6,19 @@ import cv2
 from kident2.msg import DiffMeasurement,Array_f64
 import utils
 
-#from std_msgs.msg import Float32
-#from std_srvs.srv import SetBool, SetBoolResponse
-#import utils
-
+# from std_msgs.msg import Float32
+# from std_srvs.srv import SetBool, SetBoolResponse
+# import utils
 class ParameterEstimator:
     """
     Estimate the kinematic model error of a robot manipulator
     The model is based on the DH convention
     """
+    pip2 = np.pi / 2
+    dhparams = {"theta_nom": np.array([0, 0, 0, 0, 0, 0, 0]),
+                "d_nom" : np.array([0, 0, 0, 0, 0, 0, 0]),
+                "r_nom" : np.array([0, 0, 0.42, 0, 0.4, 0, 0]),
+                "alpha_nom" : np.array([0, pip2, -pip2, -pip2, pip2, pip2, -pip2])}
     def __init__(self) -> None:
         """
         Constructor
@@ -22,47 +26,40 @@ class ParameterEstimator:
         self.sub_meas = rospy.Subscriber("diff_meas", DiffMeasurement, self.process_measurement)
         self.pub_est = rospy.Publisher("est", Array_f64, queue_size=20)
 
-        # nominal DH parameters
-        # nominal theta parameters are joint coors
-        # self.theta_nom=np.array([0,np.pi,np.pi,0,np.pi/2,0,np.pi/2])
-        # self.d_nom=np.array([0.1575,0.2025,0.2375,0.1825,0.2175,0.1825,0.171])
-        # self.a_nom=np.array([0,0,0,0,0,0,0])
-        # self.alpha_nom=np.array([0,np.pi/2,-np.pi/2,np.pi/2,np.pi/2,np.pi/2,-np.pi/2])
-
-        pip2 = np.pi / 2
-        self.theta_nom = np.array([0, np.pi, np.pi, 0, pip2, 0, pip2])
-        # self.a_nom     =np.array([0.36, 0, 0.42, 0, 0.4, 0, 0.171])
-        # self.d_nom     =np.array([0,     0, 0,     0, 0,   0, 0    ])
-        self.d_nom = np.array([0.1575,0.2025,0.2375,0.1825,0.2175,0.1825,0.171])
-        self.a_nom = np.array([0, 0, 0, 0, 0, 0, 0])
-        self.alpha_nom = np.array([0, pip2, -pip2, pip2, pip2, pip2, -pip2])
+        self.theta_nom = ParameterEstimator.dhparams["theta_nom"]
+        self.d_nom = ParameterEstimator.dhparams["d_nom"]
+        self.r_nom = ParameterEstimator.dhparams["r_nom"]
+        self.alpha_nom = ParameterEstimator.dhparams["alpha_nom"]
 
         num_links = self.theta_nom.size
-        self.rls=RLS(4*num_links,1) 
-        self.distances=np.zeros((0,))
+        self.rls = RLS(4*num_links, 1)
+        self.distances = np.zeros((0,))
 
 
 
-    def get_T__i(self, theta__i, d__i, a__i, alpha__i) -> np.array:
+    @staticmethod
+    def get_T__i(theta__i, d__i, r__i, alpha__i) -> np.array:
         Rx, Rz, Trans = utils.Rx, utils.Rz, utils.Trans
-        T = Rx(alpha__i)@Trans(d__i,0,0)@Rz(theta__i)@Trans(0,0,a__i)
+        T = Rx(alpha__i)@Trans(d__i,0,0)@Rz(theta__i)@Trans(0,0,r__i)
+        # T = Rz(theta__i) @ Trans(0, 0, d__i) @ Trans(a__i, 0, 0) @ Rx(alpha__i)
         return T
 
-
-    def get_T_jk(self,j,k,theta_all, d_all, a_all, alpha_all) -> np.array:
+    @staticmethod
+    def get_T_jk(j,k,theta_all, d_all, r_all, alpha_all) -> np.array:
         """
         T_jk = T^j_k
         """
-        theta_all, d_all, a_all, alpha_all = theta_all.flatten(), d_all.flatten(), a_all.flatten(), alpha_all.flatten()
+        theta_all, d_all, r_all, alpha_all = theta_all.flatten(), d_all.flatten(), r_all.flatten(), alpha_all.flatten()
         T=np.eye(4)
         for i in range(k+1, j+1, 1): # first i=k+1, last i=j
-            T=np.matmul(T,self.get_T__i(theta_all[i-1], d_all[i-1], a_all[i-1], alpha_all[i-1]))
+            T=np.matmul(T,ParameterEstimator.get_T__i(theta_all[i-1], d_all[i-1], r_all[i-1], alpha_all[i-1]))
         return T
 
-    def get_T__i0(self, i, theta_all, d_all, a_all, alpha_all) -> np.array:
-        return self.get_T_jk(i,0,theta_all, d_all, a_all, alpha_all)
-    
-    
+    @staticmethod
+    def get_T__i0(i, theta_all, d_all, r_all, alpha_all) -> np.array:
+        return ParameterEstimator.get_T_jk(i,0,theta_all, d_all, r_all, alpha_all)
+
+
     def get_parameter_jacobian(self, theta_all, d_all, a_all, alpha_all) -> np.array:
         """
         Get the parameter jacobian, that is the matrix approximating the effect of parameter (DH)
@@ -89,7 +86,7 @@ class ParameterEstimator:
             w=np.reshape(np.cross(t__i_0,t1.flatten()),(3,1))
 
             W1 = np.concatenate((W1,w), axis=1)
-            
+
             W2 = np.concatenate((W2,t1), axis=1)
 
             W3 = np.concatenate((W3,t2), axis=1)
@@ -106,7 +103,7 @@ class ParameterEstimator:
         J[0:3,:]=np.concatenate((W7, W2, W3, W8), axis=1)
         J[3:6,:]=np.concatenate((W2, np.zeros((3,num_links)), np.zeros((3,num_links)), W3), axis=1)
         return J
-    
+
 
     def process_measurement(self, m):
         # calculate the poses of the camera based on the nominal 
@@ -114,13 +111,13 @@ class ParameterEstimator:
         try:
             num_links = (np.array(m.q1)).size
             theta_nom1 = np.array(m.q1)+self.theta_nom
-            T_nom1 = self.get_T__i0(num_links,theta_nom1, self.d_nom, self.a_nom, self.alpha_nom)
+            T_nom1 = self.get_T__i0(num_links,theta_nom1, self.d_nom, self.r_nom, self.alpha_nom)
             tvec_nom1 = T_nom1[0:3,3].reshape((3,1))
             rvec_nom1 = cv2.Rodrigues(T_nom1[0:3,0:3])[0]
 
 
             theta_nom2 = np.array(m.q2)+self.theta_nom
-            T_nom2 = self.get_T__i0(num_links,theta_nom2, self.d_nom, self.a_nom, self.alpha_nom)
+            T_nom2 = self.get_T__i0(num_links,theta_nom2, self.d_nom, self.r_nom, self.alpha_nom)
             tvec_nom2 = T_nom2[0:3,3].reshape((3,1))
             rvec_nom2 = cv2.Rodrigues(T_nom2[0:3,0:3])[0]
 
@@ -136,8 +133,8 @@ class ParameterEstimator:
         current_error=np.concatenate((dtvec_real-dtvec_nom,drvec_real-drvec_nom),axis=0)
 
         # calculate the corresponding difference jacobian
-        jacobian1 = self.get_parameter_jacobian(theta_nom1, self.d_nom, self.a_nom, self.alpha_nom)
-        jacobian2 = self.get_parameter_jacobian(theta_nom2, self.d_nom, self.a_nom, self.alpha_nom)
+        jacobian1 = self.get_parameter_jacobian(theta_nom1, self.d_nom, self.r_nom, self.alpha_nom)
+        jacobian2 = self.get_parameter_jacobian(theta_nom2, self.d_nom, self.r_nom, self.alpha_nom)
         jacobian = jacobian1-jacobian2
 
         try:
@@ -154,7 +151,7 @@ class ParameterEstimator:
         self.pub_est.publish(msg)
 
 
-class RLS(): 
+class RLS():
     def __init__(self, num_params, q, alpha=1e3)->None:
         """
         num_params: number of parameters to be estimated
@@ -169,7 +166,7 @@ class RLS():
         self.P = alpha*np.eye(num_params) #initial value of matrix P
         self.phat = np.zeros((num_params,1)) #initial guess for parameters, col vector
         self.num_obs=0
-        
+
 
     def add_obs(self, S, Y)->None:
         """
@@ -199,7 +196,7 @@ class RLS():
 
             self.phat = self.phat + self.k*(y - s_T@self.phat)
             self.num_obs = self.num_obs+1
-        
+
         # if (np.any(np.abs(self.phat)>0.15)): # values are too big, reset LSQ
         #     self.P = self.alpha*np.eye(self.num_params) #initial value of matrix P
         #     self.phat = np.zeros((self.num_params,1)) #initial guess for parameters, col vector
