@@ -14,44 +14,32 @@ class MoveRobot:
     After reaching an end of the trajectory, the direction is reversed
     """
 
-    def __init__(self, mode, traj=None) -> None:
+    def __init__(self, traj_file) -> None:
         self.pub = rospy.Publisher("q_desired", Array_f64, queue_size=2)
         self.k = 0
         self.forward = True
-        if mode == "csv":
-            try:
-                df = pd.read_csv(traj)
-            except:
-                rospy.logerr("Could not load trajectory from {}".format(traj))
-            self.traj = df.to_numpy()  # shape: (num_joints, num_traj_points)
-            self.traj = self.traj[:, 1:]  # delete header
-            # move certain joints only
-            self.traj[0, :] = np.zeros(5000)
-            self.traj[1, :] = np.zeros(5000)
-            self.traj[2, :] = np.zeros(5000)
-            self.traj[3, :] = np.zeros(5000)
-            self.traj[4, :] = np.zeros(5000)
-            # self.traj[5, :] = np.zeros(5000)
-            # self.traj[6, :] = np.zeros(5000)
-        elif mode == "tri":
-            a = 10 / 180 * np.pi
-            self.traj = np.array([[0, a], [0, a], [0, a], [0, a], [0, a], [0, a], [0, a]])
+        try:
+            df = pd.read_csv(traj_file)
+        except:
+            rospy.logerr("Could not load trajectory from {}".format(traj_file))
+        self.traj = df.to_numpy()  # shape: (num_joints, num_traj_points)
+        self.traj = self.traj[:, 1:]  # delete header
+        # move certain joints only
+        # len_traj =
+        # self.traj[0, :] = np.zeros(5000)
+        # self.traj[1, :] = np.zeros(5000)
+        # self.traj[2, :] = np.zeros(5000)
+        # self.traj[3, :] = np.zeros(5000)
+        # self.traj[4, :] = np.zeros(5000)
+        # self.traj[5, :] = np.zeros(5000)
+        # self.traj[6, :] = np.zeros(5000)
 
-    def move_random(self):
-        q = (np.random.rand(7) - np.full((7,), 0.5)) * np.pi / 2
-        # create instance and populate
-        msg = Array_f64()
-        msg.data = q
-        msg.time = rospy.get_time()
-
-        # publish to topic
-        self.pub.publish(msg)
-
-    def send_message(self) -> None:
+    def send_next_q_desired(self):
+        q_desired = self.traj[:, self.k]
         # create instance and populate with values
         msg = Array_f64()
-        msg.data = self.traj[:, self.k]
-        msg.time = rospy.get_time()
+        msg.data = q_desired
+        msg.time = rospy.get_time() + 5 # 5 seconds to complete the trajectory
 
         # publish to topic
         self.pub.publish(msg)
@@ -64,21 +52,30 @@ class MoveRobot:
         _, len_traj = np.shape(self.traj)
         if self.k == len_traj - 1:
             self.forward = False
-            rospy.logerr("move_iiwa: REACHED END, GOING BACK")
+            rospy.loginfo("move_iiwa: REACHED END, GOING BACK")
         if self.k == 0:
             self.forward = True
+        return q_desired
 
 
 # Node
 if __name__ == "__main__":
     rospy.init_node('move_iiwa')
+    eps = 10 * np.pi / 180 # precision for norm of difference bw q and q_desired
 
-    mover = MoveRobot(mode='csv', traj="/home/armin/catkin_ws/src/kident2/src/traj.csv")
-    # rate = rospy.Rate(1) # rate of publishing in Hz
+    mover = MoveRobot(traj_file="/home/armin/catkin_ws/src/kident2/src/traj.csv")
+    rate = rospy.Rate(1) # rate in Hz
 
-    # mover = MoveRobot(mode='tri')
-    # _msg = rospy.wait_for_message("iiwa_q", Array_f64) # wait for iiwa handler to publish first message
+    _msg = rospy.wait_for_message("iiwa_q", Array_f64) # wait for iiwa handler to publish first message
     rospy.sleep(0.1)
     while not rospy.is_shutdown():
-        mover.move_random()
-        rospy.sleep(1)
+        q_desired = mover.send_next_q_desired()
+        while True:
+            q_current_msg = rospy.wait_for_message("iiwa_q", Array_f64)
+            q_current = q_current_msg.data
+            diff = np.array(q_desired)-np.array(q_current)
+            test = np.linalg.norm(diff)
+            rospy.logerr("diff = {}".format(test))
+            if np.linalg.norm(diff) < eps:
+                break
+            rate.sleep()
