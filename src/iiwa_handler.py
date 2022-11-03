@@ -30,7 +30,7 @@ class IiwaHandler:
         self.serv_q = rospy.Service('get_q_interp', Get_q, self.get_q_interpolated)
         self.sub_q_desired = rospy.Subscriber("q_desired", Array_f64, self.move_jointspace)
 
-        self.qs = deque(maxlen=100)
+        self.qs = deque(maxlen=10000)
 
     def readout_q(self) -> None:
         """
@@ -71,8 +71,12 @@ class IiwaHandler:
                 # check if t_interest is newer than last entry
 
         # interpolation
-        qs_interval = np.transpose(np.array(qs_interval).squeeze())  # convert to array and transpose
-        q_interp = np.array([np.interp(t_interest, t_interval, qi_interval) for qi_interval in qs_interval])  # for each [qi-,qi+] interpolate
+        try:
+            qs_interval = np.transpose(np.array(qs_interval).squeeze())  # convert to array and transpose
+            q_interp = np.array([np.interp(t_interest, t_interval, qi_interval) for qi_interval in qs_interval])  # for each [qi-,qi+] interpolate
+        except:
+            rospy.logwarn("iiwa_handler: Could not interpolate")
+            return resp
         resp.q = q_interp.tolist()
         resp.time = t_interest
         return resp
@@ -105,7 +109,7 @@ if __name__ == "__main__":
     handler = IiwaHandler()
     rospy.on_shutdown(handler.release_udp_socket)
 
-    rate = rospy.Rate(10) # rate of readout
+    rate = rospy.Rate(1000) # rate of readout
     while not rospy.is_shutdown():
         # slot 1/4
         handler.readout_q()

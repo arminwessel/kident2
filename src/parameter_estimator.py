@@ -15,10 +15,16 @@ class ParameterEstimator:
     The model is based on the DH convention
     """
     pip2 = np.pi / 2
+    pi = np.pi
     dhparams = {"theta_nom": np.array([0, 0, 0, 0, 0, 0, 0]),
                 "d_nom" : np.array([0, 0, 0, 0, 0, 0, 0]),
                 "r_nom" : np.array([0, 0, 0.42, 0, 0.4, 0, 0]),
                 "alpha_nom" : np.array([0, pip2, -pip2, -pip2, pip2, pip2, -pip2])}
+
+    # dhparams = {"theta_nom": np.array([0, pi, pi, 0, pi, 0, pi]),
+    #             "d_nom" : np.array([0.1525, 0.2075, 0.2325, 0.1825, 0.2125, 0.1875, 0.081]),
+    #             "r_nom" : np.array([0, 0, 0, 0, 0, 0, 0]),
+    #             "alpha_nom" : np.array([0, pip2, pip2, pip2, pip2, pip2, pip2])}
     def __init__(self) -> None:
         """
         Constructor
@@ -38,26 +44,31 @@ class ParameterEstimator:
 
 
     @staticmethod
-    def get_T__i(theta__i, d__i, r__i, alpha__i) -> np.array:
+    def get_T__i(q__i, theta__i, d__i, r__i, alpha__i, type='revolute') -> np.array:
         Rx, Rz, Trans = utils.Rx, utils.Rz, utils.Trans
-        T = Rx(alpha__i)@Trans(d__i,0,0)@Rz(theta__i)@Trans(0,0,r__i)
-        # T = Rz(theta__i) @ Trans(0, 0, d__i) @ Trans(a__i, 0, 0) @ Rx(alpha__i)
+        if type=='revolute':
+            # T = Rz(q__i+theta__i) @ Trans(0, 0, d__i) @ Trans(r__i, 0, 0) @ Rx(alpha__i)
+            T = Rx(alpha__i) @ Trans(d__i, 0, 0) @ Rz(theta__i + q__i) @ Trans(0, 0, r__i)
+        elif type=='prismatic':
+            # T = Rz(theta__i) @ Trans(0, 0, q__i + d__i) @ Trans(r__i, 0, 0) @ Rx(alpha__i)
+            T = Rx(alpha__i) @ Trans(d__i, 0, 0) @ Rz(theta__i) @ Trans(0, 0, r__i+q__i)
+        else:
+            return None
         return T
 
     @staticmethod
-    def get_T_jk(j,k,theta_all, d_all, r_all, alpha_all) -> np.array:
+    def get_T_jk(j,k,q,theta_all, d_all, r_all, alpha_all) -> np.array:
         """
         T_jk = T^j_k
         """
-        theta_all, d_all, r_all, alpha_all = theta_all.flatten(), d_all.flatten(), r_all.flatten(), alpha_all.flatten()
-        T=np.eye(4)
-        for i in range(k+1, j+1, 1): # first i=k+1, last i=j
-            T=np.matmul(T,ParameterEstimator.get_T__i(theta_all[i-1], d_all[i-1], r_all[i-1], alpha_all[i-1]))
+        q, theta_all, d_all, r_all, alpha_all = q.flatten(), theta_all.flatten(), d_all.flatten(), r_all.flatten(), alpha_all.flatten()
+        T = np.eye(4)
+        for i in range(j, k):
+            # print(f"i={i}, j={j}, k={k}, theta={theta_all[i]+q[i]}, d={d_all[i]}, r={r_all[i]}, alpha={alpha_all[i]}\n")
+            _T = ParameterEstimator.get_T__i(q[i], theta_all[i], d_all[i], r_all[i], alpha_all[i])
+            T = T @ _T
         return T
 
-    @staticmethod
-    def get_T__i0(i, theta_all, d_all, r_all, alpha_all) -> np.array:
-        return ParameterEstimator.get_T_jk(i,0,theta_all, d_all, r_all, alpha_all)
 
 
     def get_parameter_jacobian(self, theta_all, d_all, a_all, alpha_all) -> np.array:

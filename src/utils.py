@@ -2,18 +2,18 @@
 """
 Utility Functions
 """
+import cv2
 import numpy as np
 import math as m
 
-def H(rot_euler,trans):
-    rotmat_H=Rx(rot_euler[0]/180*np.pi)@Ry(rot_euler[1]/180*np.pi)@Rz(rot_euler[2]/180*np.pi)
-    rotmat=rotmat_H[0:3,0:3]
-    lower=np.reshape(np.array([0,0,0,1]),(1,4))
-    upper=np.concatenate(
-        (rotmat, np.reshape(np.array(trans),(3,1))),
+def H_rvec_tvec(rvec,tvec):
+    rotmat, _ = cv2.Rodrigues(np.array(rvec))
+    lower = np.reshape(np.array([0, 0, 0, 1]), (1, 4))
+    upper = np.concatenate(
+        (rotmat, np.reshape(np.array(tvec), (3, 1))),
         axis=1
     )
-    H=np.concatenate(
+    H = np.concatenate(
         (upper, lower),
         axis=0
     )

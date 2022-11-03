@@ -36,6 +36,7 @@ class MarkerBasedTracker:
         self.aruco_length = aruco_marker_length
         self.camera_matrix = cam_matrix
         self.camera_distortion = camera_distortion
+        self.locked = False
 
         rospy.loginfo("Tracker waiting for service get_q_interp")
         rospy.wait_for_service('get_q_interp')
@@ -43,6 +44,7 @@ class MarkerBasedTracker:
         self.pub_image_overlay = rospy.Publisher("image_overlay", Image, queue_size=20)
 
         self.observations = dict()  # keys are marker ids, for each id there is a deque of observations
+        self.num_observations = 0
 
         self.pub_meas = rospy.Publisher("diff_meas", DiffMeasurement, queue_size=20)
         rospy.loginfo("Tracker initialized")
@@ -51,12 +53,16 @@ class MarkerBasedTracker:
         """
         Method executed for every frame: get marker observations and joint coordinates
         """
-        # t = rospy.get_time()
+        if self.locked:
+            return
         t = image_message.header.stamp.to_sec()
         cv_image = ros_numpy.numpify(image_message)  # convert image to np array
         res = self.get_q_interp_proxy(t)  # service call to iiwa_handler to interp q(t)
-        q = res.q
+        q = np.array(res.q)
+        if q.size == 0:
+            return  # if interpolation was not successful, dont observe the markers
         self.observe_markers(cv_image, t, q)  # adds observations to queue
+
 
     def observe_markers(self, frame, t, q) -> None:
         """
@@ -111,9 +117,11 @@ class MarkerBasedTracker:
                    "tvec": o[2].flatten().tolist(),
                    "t": t,
                    "q": q}
+            self.num_observations += 1 # count observations
+            print(f"Number of observations: {self.num_observations}")
 
             if not id in self.observations:  # if this id was not yet used initialize queue for it
-                self.observations[id] = deque(maxlen=10)
+                self.observations[id] = deque(maxlen=30)
 
             self.observations[id].append(obs)  # append observation to queue corresponding to id (deque from right)
 
@@ -180,4 +188,22 @@ if __name__ == "__main__":
     tracker = MarkerBasedTracker(aruco_marker_length=0.12, cam_matrix=camera_matrix, camera_distortion=np.zeros(5))
 
     while not rospy.is_shutdown():
-        tracker.process_observations()
+        # if tracker.num_observations > 1000:
+        num_markers = len(tracker.observations.keys())
+        print(f"Num markers: {num_markers}")
+        # if tracker.num_observations > 50:
+        if num_markers > 80:
+            tracker.locked = True
+            import pickle
+            # open a file to store data
+            observations_file_str = "/home/armin/catkin_ws/src/kident2/src/observations.p"
+            observations_file = open(observations_file_str, 'wb')
+            # dump information to that file
+            pickle.dump(tracker.observations, observations_file)
+            # close the file
+            observations_file.close()
+            print("done")
+            break
+        else:
+            rospy.sleep(0.5)
+        #tracker.process_observations()
