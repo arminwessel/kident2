@@ -47,7 +47,7 @@ class ExtrinsicCalib:
         self.ukf = UKF()
 
         self.cntr = 0
-        observations_file_str = "/home/armin/catkin_ws/src/kident2/src/observations.p"
+        observations_file_str = "observations_small.p"
         observations_file = open(observations_file_str, 'rb')
 
         # dump information to that file

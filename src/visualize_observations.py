@@ -16,7 +16,7 @@ r_nom = ParameterEstimator.dhparams["r_nom"]
 d_nom = ParameterEstimator.dhparams["d_nom"]
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"]
 
-observations_file_str = "/home/armin/catkin_ws/src/kident2/src/observations.p"
+observations_file_str = "observations_fake.p"
 observations_file = open(observations_file_str, 'rb')
 
 # dump information to that file
@@ -77,38 +77,40 @@ T_corr = np.array([[ 0,  0, 1, 0],
 
 tm = TransformManager()
 
-for id in [25, 17, 16, 42, 70]:
-    for id, obs in enumerate(observations[id]):
+for markerid in list(observations)[:7]:
+    for id, obs in enumerate(observations[markerid]):
         # T_07 = ParameterEstimator.get_T__i0(7, np.array(obs['q']), d_nom, r_nom, alpha_nom)
 
         # obs['q'] = [0, 0, 0, 0, 0, 0, 0]
 
-        tm.add_transform(f"{id}_frame0", "W", T_W0)
+        # tm.add_transform(f"{id}_frame0", "W", T_W0)
+        #
+        # T_01 = ParameterEstimator.get_T_jk(0, 1, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
+        # tm.add_transform(f"{id}_frame1", f"{id}_frame0", T_01)
+        #
+        # T_12 = ParameterEstimator.get_T_jk(1, 2, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
+        # tm.add_transform(f"{id}_frame2", f"{id}_frame1", T_12)
+        #
+        # T_23 = ParameterEstimator.get_T_jk(2, 3, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
+        # tm.add_transform(f"{id}_frame3", f"{id}_frame2", T_23)
+        #
+        # T_34 = ParameterEstimator.get_T_jk(3, 4, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
+        # tm.add_transform(f"{id}_frame4", f"{id}_frame3", T_34)
+        #
+        # T_45 = ParameterEstimator.get_T_jk(4, 5, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
+        # tm.add_transform(f"{id}_frame5", f"{id}_frame4", T_45)
+        #
+        # T_56 = ParameterEstimator.get_T_jk(5, 6, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
+        # tm.add_transform(f"{id}_frame6", f"{id}_frame5", T_56)
+        #
+        # T_67 = ParameterEstimator.get_T_jk(6, 7, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
+        # tm.add_transform(f"{id}_frame7", f"{id}_frame6", T_67)
+        #
+        # tm.add_transform(f"{id}_frameC", f"{id}_frame7", T_7C)
 
-        T_01 = ParameterEstimator.get_T_jk(0, 1, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
-        tm.add_transform(f"{id}_frame1", f"{id}_frame0", T_01)
-
-        T_12 = ParameterEstimator.get_T_jk(1, 2, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
-        tm.add_transform(f"{id}_frame2", f"{id}_frame1", T_12)
-
-        T_23 = ParameterEstimator.get_T_jk(2, 3, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
-        tm.add_transform(f"{id}_frame3", f"{id}_frame2", T_23)
-
-        T_34 = ParameterEstimator.get_T_jk(3, 4, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
-        tm.add_transform(f"{id}_frame4", f"{id}_frame3", T_34)
-
-        T_45 = ParameterEstimator.get_T_jk(4, 5, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
-        tm.add_transform(f"{id}_frame5", f"{id}_frame4", T_45)
-
-        T_56 = ParameterEstimator.get_T_jk(5, 6, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
-        tm.add_transform(f"{id}_frame6", f"{id}_frame5", T_56)
-
-        T_67 = ParameterEstimator.get_T_jk(6, 7, np.array(obs['q']), theta_nom, d_nom, r_nom, alpha_nom)
-        tm.add_transform(f"{id}_frame7", f"{id}_frame6", T_67)
-
-        tm.add_transform(f"{id}_frameC", f"{id}_frame7", T_7C)
-
-        T_WC = T_W0 @ T_01 @ T_12 @ T_23 @ T_34 @ T_45 @ T_56 @ T_67 @ T_7C
+        # T_WC = T_W0 @ T_01 @ T_12 @ T_23 @ T_34 @ T_45 @ T_56 @ T_67 @ T_7C
+        T_07 = ParameterEstimator.get_T_jk(0, 7, obs['q'], theta_nom, d_nom, r_nom, alpha_nom)
+        T_WC = T_W0 @ T_07 @ T_7C
         trans_z = T_WC @ np.array([0, 0, 1, 1])
         X.append(T_WC[0, 3])
         Y.append(T_WC[1, 3])
@@ -119,8 +121,7 @@ for id in [25, 17, 16, 42, 70]:
 
         T_CM = utils.H_rvec_tvec(obs["rvec"], obs["tvec"])
         T_CM_corr = T_corr @ T_CM
-        tm.add_transform(f"{id}_frameM", f"{id}_frameC", T_CM_corr)
-
+        # tm.add_transform(f"{id}_frameM", f"{id}_frameC", T_CM_corr)
 
         M = T_WC @ T_CM_corr
 
@@ -156,7 +157,7 @@ ax.set_title("Observations")
 ax.scatter(X, Y, Z, c='green')
 # ax.scatter([1], [1], [1], c='green')
 ax.scatter(X_m, Y_m, Z_m, c='red')
-ax.scatter([0.7670], [1.5403], [2.4575], c='purple')
+# ax.scatter([0.7670], [1.5403], [2.4575], c='purple')
 # ax.scatter([0], [0], [0], c='blue')
 #
 #

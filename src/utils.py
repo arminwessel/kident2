@@ -7,7 +7,7 @@ import numpy as np
 import math as m
 
 def H_rvec_tvec(rvec,tvec):
-    rotmat, _ = cv2.Rodrigues(np.array(rvec))
+    rotmat, _ = cv2.Rodrigues(np.array(rvec).flatten())
     lower = np.reshape(np.array([0, 0, 0, 1]), (1, 4))
     upper = np.concatenate(
         (rotmat, np.reshape(np.array(tvec), (3, 1))),
@@ -19,6 +19,16 @@ def H_rvec_tvec(rvec,tvec):
     )
     return np.asarray(H)
 
+def mat2rvectvec(transformation_matrix):
+    assert (4, 4) == np.shape(transformation_matrix)
+    R = transformation_matrix[0:3, 0:3]
+    rvec = cv2.Rodrigues(R)[0].flatten()
+    # theta = np.linalg.norm(rvec)
+    # while np.abs(theta) > np.pi * 0.99999:
+    #     rvec = (rvec / theta) * (theta - np.pi)   # normalize with theta, then scale up to unwrapped magnitude
+    #     theta = np.linalg.norm(rvec)
+    tvec = transformation_matrix[0:3, 3]
+    return rvec, tvec
 
 def roundprint(H):
     for line in H:

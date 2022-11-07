@@ -121,7 +121,7 @@ class MarkerBasedTracker:
             print(f"Number of observations: {self.num_observations}")
 
             if not id in self.observations:  # if this id was not yet used initialize queue for it
-                self.observations[id] = deque(maxlen=30)
+                self.observations[id] = deque(maxlen=50)
 
             self.observations[id].append(obs)  # append observation to queue corresponding to id (deque from right)
 
@@ -142,10 +142,10 @@ class MarkerBasedTracker:
             return
         obs1 = self.observations[id].popleft()  # this oldest observation is removed from queue
         obs2 = self.observations[id][0]  # this now oldest observation will be kept for next measurement
-        timediff = obs2["t"] - obs1["t"]
-        if (np.abs(timediff) > 0.1):  # more than three frames means data is too old, 0.03 s bw frames
-            rospy.logwarn("Measurement dropped, time bw obs was too much with {} s".format(timediff))
-            return
+        # timediff = obs2["t"] - obs1["t"]
+        # if (np.abs(timediff) > 0.1):  # more than three frames means data is too old, 0.03 s bw frames
+        #     rospy.logwarn("Measurement dropped, time bw obs was too much with {} s".format(timediff))
+        #     return
         H1 = utils.H(obs1["rvec"], obs1["tvec"])
         H2 = utils.H(obs2["rvec"], obs2["tvec"])
         H1i, H2i = np.linalg.inv(H1), np.linalg.inv(H2)
@@ -158,10 +158,10 @@ class MarkerBasedTracker:
             #return
 
         # sanity checks
-        dist_pos = np.linalg.norm(dtvec)
-        if dist_pos > 0.05:
-            rospy.logwarn("Distance in pose is greater than 5 cm: dist={} cm".format(100 * dist_pos))
-            return
+        # dist_pos = np.linalg.norm(dtvec)
+        # if dist_pos > 0.05:
+        #     rospy.logwarn("Distance in pose is greater than 5 cm: dist={} cm".format(100 * dist_pos))
+        #     return
 
         dist_q = np.array(obs1["q"]) - np.array(obs2["q"])
         if np.any(dist_q > 0.01):
@@ -192,11 +192,11 @@ if __name__ == "__main__":
         num_markers = len(tracker.observations.keys())
         print(f"Num markers: {num_markers}")
         # if tracker.num_observations > 50:
-        if num_markers > 80:
+        if num_markers > 100:
             tracker.locked = True
             import pickle
             # open a file to store data
-            observations_file_str = "/home/armin/catkin_ws/src/kident2/src/observations.p"
+            observations_file_str = "observations_big.p"
             observations_file = open(observations_file_str, 'wb')
             # dump information to that file
             pickle.dump(tracker.observations, observations_file)

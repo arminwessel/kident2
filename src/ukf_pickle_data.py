@@ -9,7 +9,7 @@ import utils
 from pytransform3d import rotations as pr
 from pytransform3d import transformations as pt
 from pytransform3d.transform_manager import TransformManager
-from Pose_Estimation_Class import UKF, IEKF
+from Pose_Estimation_Class import UKF, IEKF, Batch_Processing
 from helpers import Tools
 
 theta_nom = ParameterEstimator.dhparams["theta_nom"]
@@ -17,7 +17,7 @@ r_nom = ParameterEstimator.dhparams["r_nom"]
 d_nom = ParameterEstimator.dhparams["d_nom"]
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"]
 
-observations_file_str = "/home/armin/catkin_ws/src/kident2/src/observations.p"
+observations_file_str = "observations_small.p"
 observations_file = open(observations_file_str, 'rb')
 
 # dump information to that file
@@ -54,10 +54,13 @@ T_W0 = np.array([[-1, 0, 0, 0],
 T_7C = utils.Trans(0, 0, 0.281) @ utils.Rz(np.pi)
 tm = TransformManager()
 marker_distance_errors = []
+A_seq = np.zeros((4, 4, 0))
+B_seq = np.zeros((4, 4, 0))
 for id in observations:
 # for id in [69]:
     for obs1 in observations[id]:
         obs2 = random.choice(observations[id])
+
         T_07_1 = ParameterEstimator.get_T_jk(0, 7, np.array(obs1['q']), theta_nom, d_nom, r_nom, alpha_nom)
         tm.add_transform(f"7_1", "0", T_07_1)
         T_07_2 = ParameterEstimator.get_T_jk(0, 7, np.array(obs2['q']), theta_nom, d_nom, r_nom, alpha_nom)
@@ -83,8 +86,10 @@ for id in observations:
         B = T_CM_1 @ np.linalg.inv(T_CM_2)
         current_error = np.linalg.norm(T_WM_1[0:3, 3] - T_WM_2[0:3, 3])
         marker_distance_errors.append(current_error)
+        A_seq = np.append(A_seq, np.reshape(A, (4, 4, 1)), axis=2)
+        B_seq = np.append(B_seq, np.reshape(B, (4, 4, 1)), axis=2)
         ########### PLOTS ################
-        if False: #current_error > 0.025:
+        if False:
             fig = plt.figure()
             ax = tm.plot_frames_in("W", s=0.15)
             # ax = fig.add_subplot(111, projection='3d')
@@ -116,11 +121,6 @@ for id in observations:
             #     ax.plot([2, x_m], [2, y_m], [0, z_m], c="yellow")
 
 
-
-            # #
-            ##################################
-
-
             ax.plot([T_W7_1[0, 3], (T_W7_1 @ A)[0, 3]], [T_W7_1[1, 3], (T_W7_1 @ A)[1, 3]],
                     [T_W7_1[2, 3], (T_W7_1 @ A)[2, 3]], c="red")
             ax.plot([T_WC_1[0, 3], (T_WC_1 @ B)[0, 3]], [T_WC_1[1, 3], (T_WC_1 @ B)[1, 3]],
@@ -129,27 +129,37 @@ for id in observations:
             utils.roundprint(A @ T_7C)
             utils.roundprint(T_7C @ B)
             plt.show()
-        if current_error < 0.001:
-            ukf.Update(B, A)
-            # ukf.Update(np.linalg.inv(A), B)
-            # ukf.Update(A, np.linalg.inv(B))
-            # ukf.Update(np.linalg.inv(A), np.linalg.inv(B))
+
+        ukf.Update(A, B)
+        # ukf.Update(np.linalg.inv(A), B)
+        # ukf.Update(A, np.linalg.inv(B))
+        # ukf.Update(np.linalg.inv(A), np.linalg.inv(B))
 
 
-theta = np.linalg.norm(ukf.x[:3])
-EPS = 0.00001
-if theta < EPS:
-    k = [0, 1, 0]  # VRML standard
-else:
-    k = ukf.x[0:3] / np.linalg.norm(ukf.x[:3])
-euler_ukf = Tools.mat2euler(Tools.vec2rotmat(theta, k))
+### UKF
+# theta = np.linalg.norm(ukf.x[:3])
+# EPS = 0.00001
+# if theta < EPS:
+#     k = [0, 1, 0]  # VRML standard
+# else:
+#     k = ukf.x[0:3] / np.linalg.norm(ukf.x[:3])
+# euler_ukf = Tools.mat2euler(Tools.vec2rotmat(theta, k))
+# print('\n')
+# print('.....UKF Results')
+# print("UKF [euler_rpy(deg) , pos(mm)]:", np.array([euler_ukf]) * 180 / np.pi, ukf.x[3:] * 100)
+#
+# plt.figure("UKF consistency")
+# plt.plot(range(len(ukf.consistency)), ukf.consistency)
+#
+# plt.figure("Distance Error")
+# plt.plot(range(len(marker_distance_errors)), marker_distance_errors)
+# plt.show()
+#######
+
+
+X_est, Y_est, Y_est_check, ErrorStats = Batch_Processing.pose_estimation(A_seq, B_seq)
 print('\n')
-print('.....UKF Results')
-print("UKF [euler_rpy(deg) , pos(mm)]:", np.array([euler_ukf]) * 180 / np.pi, ukf.x[3:] * 100)
+print('.....Batch Processing Results')
+euler_batch = Tools.mat2euler(X_est[:3, :3])
 
-plt.figure("UKF consistency")
-plt.plot(range(len(ukf.consistency)), ukf.consistency)
-
-plt.figure("Distance Error")
-plt.plot(range(len(marker_distance_errors)), marker_distance_errors)
-plt.show()
+print("Batch[euler_rpy(deg) , pos(mm)]:", np.array(euler_batch) * 180 / np.pi, X_est[:3, 3].T * 100)
