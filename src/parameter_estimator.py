@@ -43,7 +43,7 @@ class ParameterEstimator:
         self.distances = np.zeros((0,))
 
     @staticmethod
-    def get_T__i(q__i, theta__i, d__i, r__i, alpha__i, type='revolute') -> np.array:
+    def get_T_i_forward(q__i, theta__i, d__i, r__i, alpha__i, type='revolute') -> np.array:
         Rx, Rz, Trans = utils.Rx, utils.Rz, utils.Trans
         if type == 'revolute':
             # T = Rz(q__i+theta__i) @ Trans(0, 0, d__i) @ Trans(r__i, 0, 0) @ Rx(alpha__i)
@@ -56,17 +56,40 @@ class ParameterEstimator:
         return T
 
     @staticmethod
+    def get_T_i_backward(q__i, theta__i, d__i, r__i, alpha__i, type='revolute') -> np.array:
+        Rx, Rz, Trans = utils.Rx, utils.Rz, utils.Trans
+        if type == 'revolute':
+            # T = Rz(q__i+theta__i) @ Trans(0, 0, d__i) @ Trans(r__i, 0, 0) @ Rx(alpha__i)
+            T = Trans(0, 0, - r__i) @ Rz(theta__i + q__i).T @ Trans(- d__i, 0, 0) @ Rx(alpha__i).T
+        elif type == 'prismatic':
+            # T = Rz(theta__i) @ Trans(0, 0, q__i + d__i) @ Trans(r__i, 0, 0) @ Rx(alpha__i)
+            T = Trans(0, 0, - r__i - q__i) @ Rz(theta__i).T @ Trans(- d__i, 0, 0) @ Rx(alpha__i).T
+        else:
+            return None
+        return T
+
+    @staticmethod
     def get_T_jk(j, k, q, theta_all, d_all, r_all, alpha_all) -> np.array:
         """
-        T_jk = T^j_k
+        T_jk = T_j^k
         """
-        q, theta_all, d_all, r_all, alpha_all = q.flatten(), theta_all.flatten(), d_all.flatten(), r_all.flatten(), alpha_all.flatten()
         T = np.eye(4)
-        for i in range(j, k):
-            # print(f"i={i}, j={j}, k={k}, theta={theta_all[i]+q[i]}, d={d_all[i]}, r={r_all[i]}, alpha={alpha_all[i]}\n")
-            _T = ParameterEstimator.get_T__i(q[i], theta_all[i], d_all[i], r_all[i], alpha_all[i])
-            T = T @ _T
-        return T
+        q, theta_all, d_all, r_all, alpha_all = q.flatten(), theta_all.flatten(), d_all.flatten(), r_all.flatten(), alpha_all.flatten()
+        if j == k:  # transform is identity
+            return T
+
+        elif j > k:  # transform is in reverse direction, aka from k t j
+            for i in range(k, j):
+                _T = ParameterEstimator.get_T_i_forward(q[i], theta_all[i], d_all[i], r_all[i], alpha_all[i])
+                T = T @ _T
+            return np.linalg.inv(T)
+
+        else:  # regular transform from j to k
+            for i in range(j, k):
+                _T = ParameterEstimator.get_T_i_forward(q[i], theta_all[i], d_all[i], r_all[i], alpha_all[i])
+                T = T @ _T
+            return T
+
 
     def get_parameter_jacobian(self, q, theta_all, d_all, r_all, alpha_all) -> np.array:
         """
@@ -116,6 +139,102 @@ class ParameterEstimator:
             J4[:, i] = J4_i
             J5[:, i] = J5_i
             J6[:, i] = J6_i
+
+        J = np.zeros((6, 4 * num_links))
+        J0 = np.zeros((3, num_links))
+        J[0:3, :] = np.concatenate((J5, J2, J3, J6), axis=1)  # upper part of Jacobian is for differential translation
+        J[3:6, :] = np.concatenate((J3, J0, J0, J2), axis=1)  # lower part is for differential rotation
+        return J
+
+    def get_parameter_jacobian_dual(self, q1, q2, theta_all, d_all, r_all, alpha_all) -> np.array:
+        """
+        Get the parameter jacobian, that is the matrix approximating the effect of parameter (DH)
+        deviations on the final pose. The number of links is inferred from the lenght of the DH
+        parameter vectors. All joints are assumed rotational.
+        """
+        assert theta_all.size == d_all.size == r_all.size == alpha_all.size, "All parameter vectors must have same length"
+        num_links = theta_all.size
+
+        J1 = np.zeros((3, num_links))
+        J2 = np.zeros((3, num_links))
+        J3 = np.zeros((3, num_links))
+        J4 = np.zeros((3, num_links))
+        J5 = np.zeros((3, num_links))
+        J6 = np.zeros((3, num_links))
+
+        # calculate the backwards chain with q1
+        T_N10 = self.get_T_jk(num_links, 0, q1, theta_all, d_all, r_all, alpha_all)  # T from N1 to 0
+        t_N10 = T_N10[0:3, 3]
+        for i in reversed(range(num_links)):   # iterate over the links backwards
+            theta = theta_all[i]
+            d = d_all[i]
+            r = r_all[i]
+            alpha = alpha_all[i]
+
+            # get the transformation to link i using q1
+            # the first transform is N to N, which is identity
+            # the last transform is to bring error in frame 1 to frame N
+            T_N1i = self.get_T_jk(num_links, i+1, q1, theta_all, d_all, r_all, alpha_all)  # T from N1 to i
+            t_N1i = T_N1i[0:3, 3]
+            R_N1i = T_N1i[0:3, 0:3]
+
+            # compute vectors wi
+            w_1i = np.array([- m.cos(theta), m.sin(theta), 0])
+            w_2i = np.array([0, 0, -1])
+            w_3i = np.array([r * m.sin(theta), r * m.cos(theta), 0])
+
+            # compute vectors that make up columns of Jacobian
+            j_i1 = np.cross(t_N1i, (R_N1i @ w_2i))
+            j_i2 = R_N1i @ w_1i
+            j_i3 = R_N1i @ w_2i
+            j_i4 = np.cross(t_N1i, (R_N1i @ w_1i)) + R_N1i @ w_3i
+            j_i5 = np.cross(j_i3, t_N10) + j_i1
+            j_i6 = np.cross(j_i2, t_N10) + j_i4
+
+            # add vectors to columns
+            J1[:, i] += j_i1
+            J2[:, i] += j_i2
+            J3[:, i] += j_i3
+            J4[:, i] += j_i4
+            J5[:, i] += j_i5
+            J6[:, i] += j_i6
+
+        # calculate the forwards chain with q2
+        T_0N2 = self.get_T_jk(0, num_links, q2, theta_all, d_all, r_all, alpha_all)  # T from 0 to N2
+        T_N1N2 = T_N10 @ T_0N2
+        t_N1N2 = T_N1N2[0:3, 3]
+        for i in range(num_links):   # iterate over the links of the robot
+            theta = theta_all[i]
+            d = d_all[i]
+            r = r_all[i]
+            alpha = alpha_all[i]
+
+            # get the transformation to link i using q1
+            T_0i = self.get_T_jk(0, i, q2, theta_all, d_all, r_all, alpha_all)
+            T_N1i = T_N10 @ T_0i
+            t_N1i = T_N1i[0:3, 3]
+            R_N1i = T_N1i[0:3, 0:3]
+
+            # compute vectors vi
+            v_1i = np.array([0, - d * m.cos(alpha), - d * m.sin(alpha)])
+            v_2i = np.array([1, 0, 0])
+            v_3i = np.array([0, - m.sin(alpha), m.cos(alpha)])
+
+            # compute vectors that make up columns of Jacobian
+            j_1 = R_N1i @ v_1i + np.cross(t_N1i, (R_N1i @ v_3i))
+            j_2 = R_N1i @ v_2i
+            j_3 = R_N1i @ v_3i
+            j_4 = np.cross(t_N1i, (R_N1i @ w_1i)) + R_N1i @ w_3i
+            j_5 = np.cross(j_3, t_N1N2) + j_1
+            j_6 = np.cross(j_2, t_N1N2) + j_4
+
+            # add vectors to columns
+            J1[:, i] += j_1
+            J2[:, i] += j_2
+            J3[:, i] += j_3
+            J4[:, i] += j_4
+            J5[:, i] += j_5
+            J6[:, i] += j_6
 
         J = np.zeros((6, 4 * num_links))
         J0 = np.zeros((3, num_links))
