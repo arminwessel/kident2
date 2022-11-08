@@ -16,10 +16,10 @@ r_nom = ParameterEstimator.dhparams["r_nom"].astype(float)
 d_nom = ParameterEstimator.dhparams["d_nom"].astype(float)
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 
-r_nom[2] = r_nom[2] + 0.5
-theta_nom[4] = theta_nom[4] + 0.03
-alpha_nom[6] = alpha_nom[6] + 0.07
-d_nom[1] = d_nom[1] + 0.4
+r_nom[3] = r_nom[3] + 0.06
+# theta_nom[4] = theta_nom[4] + 0.0003
+# alpha_nom[6] = alpha_nom[6] + 0.0007
+# d_nom[5] = d_nom[5] + 0.05
 
 observations_file_str = "observations_fake.p"
 observations_file = open(observations_file_str, 'rb')
@@ -57,27 +57,35 @@ for markerid in list(observations)[:]:
     for obs1, obs2 in combinations(observations[markerid], 2):
         if num_observed > 50:
             continue
+
+        # extract measurements
         q1 = np.array(obs1["q"])
         q2 = np.array(obs2["q"])
         T_CM_1 = T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"])
         T_CM_2 = T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"])
+
+        # calculate nominal transforms
         T_07_1 = pe.get_T_jk(0, 7, q1, theta_nom, d_nom, r_nom, alpha_nom)
         T_07_2 = pe.get_T_jk(0, 7, q2, theta_nom, d_nom, r_nom, alpha_nom)
 
-        U1 = np.linalg.inv(T_CM_1) @ np.linalg.inv(T_7C) @ np.linalg.inv(T_07_1)
-        U2 = np.linalg.inv(T_CM_2) @ np.linalg.inv(T_7C) @ np.linalg.inv(T_07_2)
-        T_0M = np.linalg.inv(T_W0) @ T_WMs[markerid]
-        U = U1 - U2
-        D = T_0M @ U
-        drvec = np.array([D[2, 1], D[0, 2], D[1, 0]])
-        dtvec = D[0:3, 3]
+        # perform necessary inversions
+        T_C7 = np.linalg.inv(T_7C)
+        T_MC_2 = np.linalg.inv(T_CM_2)
+        T_70_2 = np.linalg.inv(T_07_2)
+
+        delta_D = T_7C @ T_CM_1 @ T_MC_2 @ T_C7 @ T_70_2 @ T_07_1 - np.eye(4)
+        drvec = np.array([delta_D[2, 1], delta_D[0, 2], delta_D[1, 0]])
+        dtvec = delta_D[0:3, 3]
         pose_error = np.concatenate((dtvec, drvec))
 
         # calculate the corresponding difference jacobian
-        jacobian1 = pe.get_parameter_jacobian(q1, pe.theta_nom, pe.d_nom, pe.r_nom, pe.alpha_nom)
-        jacobian2 = pe.get_parameter_jacobian(q2, pe.theta_nom, pe.d_nom, pe.r_nom, pe.alpha_nom)
-        jacobian = jacobian1 - jacobian2
+        jacobian = pe.get_parameter_jacobian_dual(q1=q1, q2=q2,
+                                                  theta_all=pe.theta_nom,
+                                                  d_all=pe.d_nom,
+                                                  r_all=pe.r_nom,
+                                                  alpha_all=pe.alpha_nom)
 
+        # calculate position error in data
         diff = np.array([(T_07_1 @ T_7C @ T_CM_1)[0, 3] - (T_07_2 @ T_7C @ T_CM_2)[0, 3],
                          (T_07_1 @ T_7C @ T_CM_1)[1, 3] - (T_07_2 @ T_7C @ T_CM_2)[1, 3],
                          (T_07_1 @ T_7C @ T_CM_1)[2, 3] - (T_07_2 @ T_7C @ T_CM_2)[2, 3]])
