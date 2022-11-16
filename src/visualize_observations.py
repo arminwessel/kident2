@@ -16,7 +16,7 @@ r_nom = ParameterEstimator.dhparams["r_nom"]
 d_nom = ParameterEstimator.dhparams["d_nom"]
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"]
 
-observations_file_str = "observations_fake.p"
+observations_file_str = "observations_big.p"
 observations_file = open(observations_file_str, 'rb')
 
 # dump information to that file
@@ -77,7 +77,7 @@ T_corr = np.array([[ 0,  0, 1, 0],
 
 tm = TransformManager()
 
-for markerid in list(observations)[:7]:
+for markerid in list(observations):
     for id, obs in enumerate(observations[markerid]):
         # T_07 = ParameterEstimator.get_T__i0(7, np.array(obs['q']), d_nom, r_nom, alpha_nom)
 

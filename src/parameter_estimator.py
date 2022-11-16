@@ -110,7 +110,7 @@ class ParameterEstimator:
         T_0N = self.get_T_jk(0, num_links, q, theta_all, d_all, r_all, alpha_all)
         t_0N = T_0N[0:3, 3]
         for i in range(num_links):   # iterate over the links of the robot
-            theta = theta_all[i]
+            theta = theta_all[i] + q[i]
             d = d_all[i]
             r = r_all[i]
             alpha = alpha_all[i]
@@ -143,7 +143,7 @@ class ParameterEstimator:
         J = np.zeros((6, 4 * num_links))
         J0 = np.zeros((3, num_links))
         J[0:3, :] = np.concatenate((J5, J2, J3, J6), axis=1)  # upper part of Jacobian is for differential translation
-        J[3:6, :] = np.concatenate((J3, J0, J0, J2), axis=1)  # lower part is for differential rotation
+        #J[3:6, :] = np.concatenate((J3, J0, J0, J2), axis=1)  # lower part is for differential rotation
         return J
 
     def get_parameter_jacobian_dual(self, q1, q2, theta_all, d_all, r_all, alpha_all) -> np.array:
@@ -283,20 +283,20 @@ class ParameterEstimator:
             v_3 = np.array([0, - m.sin(alpha), m.cos(alpha)])
 
             # compute vectors that make up columns of Jacobian
-            j_1 = R @ v_1 + np.cross(t, (R @ v_3))
-            j_2 = R @ v_2
-            j_3 = R @ v_3
-            j_4 = np.cross(t, (R @ v_2))
-            j_5 = np.cross(j_3, t_tot) + j_1
-            j_6 = np.cross(j_2, t_tot) + j_4
+            jf_1 = R @ v_1 + np.cross(t, (R @ v_3))
+            jf_2 = R @ v_2
+            jf_3 = R @ v_3
+            jf_4 = np.cross(t, (R @ v_2))
+            jf_5 = np.cross(jf_3, t_tot) + jf_1
+            jf_6 = np.cross(jf_2, t_tot) + jf_4
 
             # add vectors to columns
-            J1[:, i] += j_1
-            J2[:, i] += j_2
-            J3[:, i] += j_3
-            J4[:, i] += j_4
-            #J5[:, i] += j_5
-            #J6[:, i] += j_6
+            J1[:, i] += jf_1
+            J2[:, i] += jf_2
+            J3[:, i] += jf_3
+            J4[:, i] += jf_4
+            J5[:, i] += jf_5
+            J6[:, i] += jf_6
 
         # calculate the reverse chain
             # parameters for current link
@@ -316,20 +316,20 @@ class ParameterEstimator:
             w_3 = np.array([r * m.sin(theta), r * m.cos(theta), 0])
 
             # compute vectors that make up columns of Jacobian
-            j_1 = np.cross(t, (R @ w_2))
-            j_2 = R @ w_1
-            j_3 = R @ w_2
-            j_4 = np.cross(t, (R @ w_1)) + R @ w_3
-            j_5 = np.cross(j_3, t_tot) + j_1
-            j_6 = np.cross(j_2, t_tot) + j_4
+            jr_1 = np.cross(t, (R @ w_2))
+            jr_2 = R @ w_1
+            jr_3 = R @ w_2
+            jr_4 = np.cross(t, (R @ w_1)) + R @ w_3
+            jr_5 = np.cross(jr_3, t_tot) + jr_1
+            jr_6 = np.cross(jr_2, t_tot) + jr_4
 
             # add vectors to columns
-            J1[:, i] += j_1
-            J2[:, i] += j_2
-            J3[:, i] += j_3
-            J4[:, i] += j_4
-            #J5[:, i] += j_5
-            #J6[:, i] += j_6
+            J1[:, i] += jr_1
+            J2[:, i] += jr_2
+            J3[:, i] += jr_3
+            J4[:, i] += jr_4
+            J5[:, i] += jr_5
+            J6[:, i] += jr_6
 
         J = np.zeros((6, 4 * num_links))
         J0 = np.zeros((3, num_links))

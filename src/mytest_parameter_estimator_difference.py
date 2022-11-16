@@ -10,28 +10,31 @@ from itertools import combinations
 from pytransform3d import rotations as pr
 from pytransform3d import transformations as pt
 from pytransform3d.transform_manager import TransformManager
+from scipy.spatial.transform import Rotation
+
+
 
 theta_nom = ParameterEstimator.dhparams["theta_nom"].astype(float)
 r_nom = ParameterEstimator.dhparams["r_nom"].astype(float)
 d_nom = ParameterEstimator.dhparams["d_nom"].astype(float)
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 
-theta_error = np.array([0, 0, 0, 0, 0, 0, 0])
-r_error = np.array([0, 0, 0, 0, 0, 0, 0])
-d_error = np.array([0, 0, 0, 0, 0, 0, 0])
-alpha_error = np.array([0, 0, 0, 0, 0, 0, 0])
+theta_error = np.array([0.0, 0, 0, 0, 0, 0, 0])
+r_error = np.array([0.0, 0, 0, 0, 0.05, 0, 0])
+d_error = np.array([0.0, 0, 0, 0, 0, 0, 0])
+alpha_error = np.array([0.0, 0, 0, 0, 0, 0, 0])
 
 
-r_error = np.random.uniform(low=-0.001, high=0.001, size=(7,))  # max error: 0.1 cm
-d_error = np.random.uniform(low=-0.001, high=0.001, size=(7,))  # max error: 0.1 cm
-alpha_error = np.random.uniform(low=-0.001, high=0.001, size=(7,))  # max error: 0.001 rad = 0.0573 deg
-theta_error = np.random.uniform(low=-0.001, high=0.001, size=(7,))  # max error: 0.001 rad = 0.0573 deg
+# r_error = np.random.uniform(low=-0.001, high=0.001, size=(7,))  # max error: 0.1 cm
+# d_error = np.random.uniform(low=-0.001, high=0.001, size=(7,))  # max error: 0.1 cm
+# alpha_error = np.random.uniform(low=-0.001, high=0.001, size=(7,))  # max error: 0.001 rad = 0.0573 deg
+# theta_error = np.random.uniform(low=-0.001, high=0.001, size=(7,))  # max error: 0.001 rad = 0.0573 deg
 
 
-r_nom = r_nom + r_error
-theta_nom = theta_nom + theta_error
-alpha_nom = alpha_nom + alpha_error
-d_nom = d_nom + d_error
+r_real = r_nom + r_error
+theta_real = theta_nom + theta_error
+alpha_real = alpha_nom + alpha_error
+d_real = d_nom + d_error
 
 observations_file_str = "observations_fake.p"
 observations_file = open(observations_file_str, 'rb')
@@ -70,38 +73,47 @@ for markerid in list(observations)[:]:
         if num_observed > 50:
             continue
 
-        # extract measurements
         q1 = np.array(obs1["q"])
         q2 = np.array(obs2["q"])
         T_CM_1 = T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"])
         T_CM_2 = T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"])
+        T_07_1 = pe.get_T_jk(0, 7, q1, theta_real, d_real, r_real, alpha_real)
+        T_07_2 = pe.get_T_jk(0, 7, q2, theta_real, d_real, r_real, alpha_real)
 
-        # calculate nominal transforms
-        T_07_1 = pe.get_T_jk(0, 7, q1, theta_nom, d_nom, r_nom, alpha_nom)
-        T_07_2 = pe.get_T_jk(0, 7, q2, theta_nom, d_nom, r_nom, alpha_nom)
+    # expected motion of camera center in C1 frame is
+        T_nom = np.linalg.inv(T_07_1 @ T_7C) @ (T_07_2 @ T_7C)
+        t_nom = T_nom[0:3, 3]
+        rot_nom = Rotation.from_dcm(T_nom[0:3, 0:3])
+        r_euler_nom = rot_nom.as_euler("zyx", degrees=True)
+    # measured motion of camera center in C1 frame is
+        T_meas = T_CM_1 @ np.linalg.inv(T_CM_2)
+        t_meas = T_meas[0:3, 3]
+        rot_meas = Rotation.from_dcm(T_meas[0:3, 0:3])
+        r_euler_meas = rot_meas.as_euler("zyx", degrees=True)
+    # error in measurement and nominal transformation is
+        rot_error = r_euler_meas - r_euler_nom
+        t_error = t_meas - t_nom
+        rot_error = Rotation.from_euler("zyx", rot_error, degrees=True)
+        R_error = rot_error.as_dcm()
+        delta = cv2.Rodrigues(R_error[0:3, 0:3])[0].flatten()
+    # composed error vector
+        pose_error = np.concatenate((t_error, delta))
 
-        # perform necessary inversions
-        T_C7 = np.linalg.inv(T_7C)
-        T_MC_2 = np.linalg.inv(T_CM_2)
-        T_70_1 = np.linalg.inv(T_07_1)
+        # calculate the corresponding jacobians
+        jacobian1 = pe.get_parameter_jacobian(q=q1,
+                                              theta_all=pe.theta_nom,
+                                              d_all=pe.d_nom,
+                                              r_all=pe.r_nom,
+                                              alpha_all=pe.alpha_nom)
+        jacobian2 = pe.get_parameter_jacobian(q=q2,
+                                              theta_all=pe.theta_nom,
+                                              d_all=pe.d_nom,
+                                              r_all=pe.r_nom,
+                                              alpha_all=pe.alpha_nom)
+    # difference of jacobians
+        jacobian = jacobian1 + jacobian2
 
-        D_meas = T_7C @ T_CM_1 @ T_MC_2 @ T_C7
-        D_nom = T_70_1 @ T_07_2
-        delta_D = D_meas @ np.linalg.inv(D_nom) - np.eye(4)
-        drvec, _ = cv2.Rodrigues(delta_D[0:3, 0:3] + np.eye(3))
-        drvec = drvec.flatten()
-        # drvec = np.array([delta_D[2, 1], delta_D[0, 2], delta_D[1, 0]])
-        dtvec = delta_D[0:3, 3]
-        pose_error = np.concatenate((dtvec, drvec))
-
-        # calculate the corresponding difference jacobian
-        jacobian = pe.get_parameter_jacobian_dual_2(q1=q1, q2=q2,
-                                                  theta_all=pe.theta_nom,
-                                                  d_all=pe.d_nom,
-                                                  r_all=pe.r_nom,
-                                                  alpha_all=pe.alpha_nom)
-
-        # calculate position error in data
+    # calculate position error in data
         diff = np.linalg.norm(np.array([(T_07_1 @ T_7C @ T_CM_1)[0, 3] - (T_07_2 @ T_7C @ T_CM_2)[0, 3],
                          (T_07_1 @ T_7C @ T_CM_1)[1, 3] - (T_07_2 @ T_7C @ T_CM_2)[1, 3],
                          (T_07_1 @ T_7C @ T_CM_1)[2, 3] - (T_07_2 @ T_7C @ T_CM_2)[2, 3]]))
@@ -114,6 +126,10 @@ for markerid in list(observations)[:]:
         estimate_k = np.reshape(np.array(estimate_k), (-1, 1))
         estimates_k = np.hstack((estimates_k, estimate_k))
         num_observed += 1
+
+        #tm.plot_frames_in(frame="0")
+        #plt.show()
+        #print("plt")
         # # Measurement
         # T_CM_1 = T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"])
         # T_CM_2 = T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"])
