@@ -107,44 +107,6 @@ for markerid in list(observations)[:]:
         estimate_k = np.reshape(np.array(estimate_k), (-1, 1))
         estimates_k = np.hstack((estimates_k, estimate_k))
         num_observed += 1
-        # # Measurement
-        # T_CM_1 = T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"])
-        # T_CM_2 = T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"])
-        # A_meas = T_7C @ T_CM_1 @ np.linalg.inv(T_CM_2) @ np.linalg.inv(T_7C)
-        # rvec_meas, tvec_meas = utils.mat2rvectvec(A_meas)
-        #
-        # # Calculation based on nominal data
-        # q1 = np.array(obs1["q"])
-        # T_07_1 = pe.get_T_jk(0, 7, q1, theta_nom, d_nom, r_nom, alpha_nom)
-        # q2 = np.array(obs2["q"])
-        # T_07_2 = pe.get_T_jk(0, 7, q2, theta_nom, d_nom, r_nom, alpha_nom)
-        # A_nom = np.linalg.inv(T_07_1) @ T_07_2
-        # rvec_nom, tvec_nom = utils.mat2rvectvec(A_nom)
-        #
-        # # calculate the error between the expected and measured pose differences
-        # drvec = rvec_nom - rvec_meas
-        # dtvec = tvec_nom - tvec_meas
-        # pose_error = np.concatenate((dtvec, drvec))
-        #
-        # # test
-        # B = A_nom @ np.linalg.inv(A_meas)
-        # r, t = utils.mat2rvectvec(B)
-
-        # # calculate the corresponding difference jacobian
-        # jacobian1 = pe.get_parameter_jacobian(q1, pe.theta_nom, pe.d_nom, pe.r_nom, pe.alpha_nom)
-        # jacobian2 = pe.get_parameter_jacobian(q2, pe.theta_nom, pe.d_nom, pe.r_nom, pe.alpha_nom)
-        # jacobian = jacobian1 - jacobian2
-        #
-        # diff = np.array([(T_07_1 @ T_7C @ T_CM_1)[0, 3] - (T_07_2 @ T_7C @ T_CM_2)[0, 3],
-        #                  (T_07_1 @ T_7C @ T_CM_1)[1, 3] - (T_07_2 @ T_7C @ T_CM_2)[1, 3],
-        #                  (T_07_1 @ T_7C @ T_CM_1)[2, 3] - (T_07_2 @ T_7C @ T_CM_2)[2, 3]])
-        # diff_k.append(np.linalg.norm(diff))
-        #
-        # pe.rls.add_obs(S=jacobian, Y=pose_error)
-        # estimate_k = pe.rls.get_estimate().flatten()
-        # estimate_k = np.reshape(np.array(estimate_k), (-1, 1))
-        # estimates_k = np.hstack((estimates_k, estimate_k))
-        # num_observed += 1
 
 fig_est, ax_est = plt.subplots(2, 2)
 fig_est.set_size_inches(16, 9, forward=True)
