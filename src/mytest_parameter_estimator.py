@@ -16,10 +16,22 @@ r_nom = ParameterEstimator.dhparams["r_nom"].astype(float)
 d_nom = ParameterEstimator.dhparams["d_nom"].astype(float)
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 
-theta_error = np.array([0, 0, 0, 0, 0, - 0.0003, 0])
-r_error = np.array([0, 0, 0, 0.004, 0, 0, 0])
-d_error = np.array([0, 0, 0, 0.005, 0, 0, 0])
-alpha_error = np.array([0, 0.0007, 0, 0, 0, 0, 0])
+theta_error = np.array([0, 0, 0, 0, 0, 0, 0])
+r_error = np.array([0, 0, 0, 0, 0, 0, 0])
+d_error = np.array([0, 0, 0, 0.05, 0, 0, 0])
+alpha_error = np.array([0, 0, 0, 0, 0, 0, 0])
+
+# r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,))))
+# d_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,))))
+# alpha_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,))))
+# theta_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,))))
+# print(r_error)
+
+r_nom = r_nom + r_error
+theta_nom = theta_nom + theta_error
+alpha_nom = alpha_nom + alpha_error
+d_nom = d_nom + d_error
+
 
 r_nom = r_nom + r_error
 theta_nom = theta_nom + theta_error
@@ -146,7 +158,7 @@ for i in range(n):
     axis[1, 1].plot(X, param_errors[i+3*n, :].flatten(), color=colors[i],   label=str(i))
 axis[1, 1].set_title(r'$\Delta$$\alpha$')
 axis[1, 1].legend()
-# plt.show()
+
 for elem in estimate_k:
     print(elem)
 
@@ -162,21 +174,25 @@ axis = ax_curr_est
 param_errors = estimates_k
 axis[0, 0].clear()
 Y = param_errors[0:n, -1]
+axis[0, 0].scatter(X, -theta_error, c='orange', s=100)
 axis[0, 0].stem(X, Y)
 axis[0, 0].set_title(r'$\Delta$$\theta$')
 
 axis[0, 1].clear()
 Y = param_errors[n:2*n, -1]
+axis[0, 1].scatter(X, -d_error, c='orange', s=100)
 axis[0, 1].stem(X, Y)
 axis[0, 1].set_title(r'$\Delta$d')
 
 axis[1, 0].clear()
 Y = param_errors[2*n:3*n, -1]
+axis[1, 0].scatter(X, -r_error, c='orange', s=100)
 axis[1, 0].stem(X, Y)
 axis[1, 0].set_title(r'$\Delta$r')
 
 axis[1, 1].clear()
 Y = param_errors[3*n:4*n, -1]
+axis[1, 1].scatter(X, -alpha_error, c='orange', s=100)
 axis[1, 1].stem(X, Y)
 axis[1, 1].set_title(r'$\Delta$$\alpha$')
 

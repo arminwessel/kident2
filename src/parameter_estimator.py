@@ -295,8 +295,8 @@ class ParameterEstimator:
             J2[:, i] += j_2
             J3[:, i] += j_3
             J4[:, i] += j_4
-            #J5[:, i] += j_5
-            #J6[:, i] += j_6
+            J5[:, i] += j_5
+            J6[:, i] += j_6
 
         # calculate the reverse chain
             # parameters for current link
@@ -328,8 +328,8 @@ class ParameterEstimator:
             J2[:, i] += j_2
             J3[:, i] += j_3
             J4[:, i] += j_4
-            #J5[:, i] += j_5
-            #J6[:, i] += j_6
+            J5[:, i] += j_5
+            J6[:, i] += j_6
 
         J = np.zeros((6, 4 * num_links))
         J0 = np.zeros((3, num_links))
