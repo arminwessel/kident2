@@ -17,9 +17,9 @@ d_nom = ParameterEstimator.dhparams["d_nom"].astype(float)
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 
 theta_error = np.array([0, 0, 0, 0, 0, 0, 0])
-r_error = np.array([0, 0, 0, 0, 0, 0, 0])
+r_error = np.array([0.03, 0, 0, 0, 0, 0, 0])
 d_error = np.array([0, 0, 0, 0.05, 0, 0, 0])
-alpha_error = np.array([0, 0, 0, 0, 0, 0, 0])
+alpha_error = np.array([0, 0, 0, 0, 0.001, 0, 0])
 
 # r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,))))
 # d_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,))))
@@ -100,11 +100,17 @@ for markerid in list(observations)[:]:
         pose_error = np.concatenate((dtvec, drvec))
 
         # calculate the corresponding difference jacobian
-        jacobian = pe.get_parameter_jacobian_dual_2(q1=q1, q2=q2,
+        jacobian = pe.get_parameter_jacobian_improved(q1=q1, q2=q2,
                                                   theta_all=pe.theta_nom,
                                                   d_all=pe.d_nom,
                                                   r_all=pe.r_nom,
                                                   alpha_all=pe.alpha_nom)
+        jacobian_classic = pe.get_parameter_jacobian_dual_2(q1=q1, q2=q2,
+                                                      theta_all=pe.theta_nom,
+                                                      d_all=pe.d_nom,
+                                                      r_all=pe.r_nom,
+                                                      alpha_all=pe.alpha_nom)
+
 
         # calculate position error in data
         diff = np.linalg.norm(np.array([(T_07_1 @ T_7C @ T_CM_1)[0, 3] - (T_07_2 @ T_7C @ T_CM_2)[0, 3],
