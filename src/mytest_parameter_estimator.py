@@ -3,10 +3,12 @@ import random
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import math as m
 from parameter_estimator import ParameterEstimator
 from mpl_toolkits.mplot3d import axes3d
 import utils
 from itertools import combinations
+from scipy.spatial.transform import Rotation
 from pytransform3d import rotations as pr
 from pytransform3d import transformations as pt
 from pytransform3d.transform_manager import TransformManager
@@ -17,9 +19,9 @@ d_nom = ParameterEstimator.dhparams["d_nom"].astype(float)
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 
 theta_error = np.array([0, 0, 0, 0, 0, 0, 0])
-r_error = np.array([0.03, 0, 0, 0, 0, 0, 0])
-d_error = np.array([0, 0, 0, 0.05, 0, 0, 0])
-alpha_error = np.array([0, 0, 0, 0, 0.001, 0, 0])
+r_error = np.array([0, 0, 0, 0, 0.02, 0, 0])
+d_error = np.array([0, 0, 0, 0, 0, 0, 0])
+alpha_error = np.array([0, 0, 0, 0, 0, 0, 0])
 
 # r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,))))
 # d_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,))))
@@ -84,41 +86,84 @@ for markerid in list(observations)[:]:
         # calculate nominal transforms
         T_07_1 = pe.get_T_jk(0, 7, q1, theta_nom, d_nom, r_nom, alpha_nom)
         T_07_2 = pe.get_T_jk(0, 7, q2, theta_nom, d_nom, r_nom, alpha_nom)
+        T_W7_1 = T_W0 @ T_07_1
+        T_W7_2 = T_W0 @ T_07_2
 
         # perform necessary inversions
         T_C7 = np.linalg.inv(T_7C)
+        T_MC_1 = np.linalg.inv(T_CM_1)
         T_MC_2 = np.linalg.inv(T_CM_2)
         T_70_1 = np.linalg.inv(T_07_1)
+        T_70_2 = np.linalg.inv(T_07_2)
 
-        D_meas = T_7C @ T_CM_1 @ T_MC_2 @ T_C7
-        D_nom = T_70_1 @ T_07_2
-        delta_D = D_meas @ np.linalg.inv(D_nom) - np.eye(4)
-        drvec, _ = cv2.Rodrigues(delta_D[0:3, 0:3] + np.eye(3))
-        drvec = drvec.flatten()
-        # drvec = np.array([delta_D[2, 1], delta_D[0, 2], delta_D[1, 0]])
-        dtvec = delta_D[0:3, 3]
-        pose_error = np.concatenate((dtvec, drvec))
+        # measurements
+        # T_meas = T_7C @ T_CM_1 @ T_MC_2 @ T_C7
+        # rmeas, tmeas = utils.mat2rvectvec(T_meas)
 
-        # calculate the corresponding difference jacobian
-        jacobian = pe.get_parameter_jacobian_improved(q1=q1, q2=q2,
-                                                  theta_all=pe.theta_nom,
-                                                  d_all=pe.d_nom,
-                                                  r_all=pe.r_nom,
-                                                  alpha_all=pe.alpha_nom)
-        jacobian_classic = pe.get_parameter_jacobian_dual_2(q1=q1, q2=q2,
+        # nominal
+        # T_nom = T_70_1 @ T_07_2
+        # rnom, tnom = utils.mat2rvectvec(T_nom)
+
+        # difference
+        # pose_error = np.concatenate((tmeas - tnom, rmeas - rnom))
+
+        # pose difference
+        t_M_A = (T_MC_1 @ T_C7)[0:3, 3]
+        t_M_B = (T_MC_2 @ T_C7)[0:3, 3]
+        t_W_A = T_W7_1[0:3, 3]
+        t_W_B = T_W7_2[0:3, 3]
+        _t_1 = t_M_B - t_M_A
+        _t_2 = t_W_B - t_W_A
+        t_diff = t_M_B - t_M_A - t_W_B + t_W_A
+
+        # rotation difference
+        R_M_A = (T_MC_1 @ T_C7)[0:3, 0:3]
+        _rot = Rotation.from_matrix(R_M_A)
+        r_M_A = _rot.as_euler("xyz", degrees=False)
+
+        R_M_B = (T_MC_2 @ T_C7)[0:3, 0:3]
+        _rot = Rotation.from_matrix(R_M_B)
+        r_M_B = _rot.as_euler("xyz", degrees=False)
+
+        R_0_A = T_07_1[0:3, 0:3]
+        _rot = Rotation.from_matrix(R_0_A)
+        r_0_A = _rot.as_euler("xyz", degrees=False)
+
+        R_0_B = T_07_2[0:3, 0:3]
+        _rot = Rotation.from_matrix(R_0_B)
+        r_0_B = _rot.as_euler("xyz", degrees=False)
+
+        R_0_A = T_07_1[0:3, 0:3]
+
+        _r_1 = r_M_B - r_M_A
+        _r_2 = r_0_B - r_0_A
+        r_diff = r_M_B - r_M_A - r_0_B + r_0_A
+
+        # pose error
+        pose_error = np.concatenate((t_diff, r_diff))
+
+        # jacobian
+        jacobian_A = pe.get_parameter_jacobian_single(q=q1,
+                                                        theta_all=pe.theta_nom,
+                                                        d_all=pe.d_nom,
+                                                        r_all=pe.r_nom,
+                                                        alpha_all=pe.alpha_nom)
+        jacobian_B = pe.get_parameter_jacobian_single(q=q2,
                                                       theta_all=pe.theta_nom,
                                                       d_all=pe.d_nom,
                                                       r_all=pe.r_nom,
                                                       alpha_all=pe.alpha_nom)
-
+        _jacobian_1 = np.concatenate((R_0_B @ jacobian_B[0:3, :], R_0_B @ jacobian_B[3:6, :]), axis=0)
+        _jacobian_2 = np.concatenate((R_0_A @ jacobian_A[0:3, :], R_0_A @ jacobian_A[3:6, :]), axis=0)
+        jacobian = _jacobian_1 - _jacobian_2
 
         # calculate position error in data
-        diff = np.linalg.norm(np.array([(T_07_1 @ T_7C @ T_CM_1)[0, 3] - (T_07_2 @ T_7C @ T_CM_2)[0, 3],
-                         (T_07_1 @ T_7C @ T_CM_1)[1, 3] - (T_07_2 @ T_7C @ T_CM_2)[1, 3],
-                         (T_07_1 @ T_7C @ T_CM_1)[2, 3] - (T_07_2 @ T_7C @ T_CM_2)[2, 3]]))
-        if diff > 0.02:
-            continue
-        diff_k.append(diff)
+        # diff = np.linalg.norm(np.array([(T_07_1 @ T_7C @ T_CM_1)[0, 3] - (T_07_2 @ T_7C @ T_CM_2)[0, 3],
+        #                  (T_07_1 @ T_7C @ T_CM_1)[1, 3] - (T_07_2 @ T_7C @ T_CM_2)[1, 3],
+        #                  (T_07_1 @ T_7C @ T_CM_1)[2, 3] - (T_07_2 @ T_7C @ T_CM_2)[2, 3]]))
+        # if diff > 0.02:
+        #     continue
+        # diff_k.append(diff)
 
         pe.rls.add_obs(S=jacobian, Y=pose_error)
         estimate_k = pe.rls.get_estimate().flatten()
@@ -170,8 +215,8 @@ for elem in estimate_k:
 
 plt.figure('diffs')
 plt.plot(diff_k)
-mean = np.mean(diff_k)
-print(f"mean diff = {mean}")
+# mean = np.mean(diff_k)
+# print(f"mean diff = {mean}")
 
 fig_curr_est, ax_curr_est = plt.subplots(2, 2)
 n = 7
