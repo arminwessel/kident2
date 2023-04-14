@@ -189,7 +189,7 @@ class ParameterEstimator:
     def get_parameter_jacobian_improved(self, q1, q2, theta_all, d_all, r_all, alpha_all) -> np.array:
         """
         Get the parameter jacobian, that is the matrix approximating the effect of parameter (DH)
-        deviations on the final pose. The number of links is inferred from the lenght of the DH
+        deviations on the final pose. The number of links is inferred from the length of the DH
         parameter vectors. All joints are assumed rotational.
         """
         assert theta_all.size == d_all.size == r_all.size == alpha_all.size, "All parameter vectors must have same length"
@@ -281,6 +281,159 @@ class ParameterEstimator:
         J[3:6, :] = np.concatenate((J3, J0, J0, J2), axis=1)  # lower part is for differential rotation
         return J
 
+    def get_parameter_jacobian_revisit_differential(self, q1, q2, theta_all, d_all, r_all, alpha_all) -> np.array:
+        """
+        Get the parameter jacobian, that is the matrix approximating the effect of parameter (DH)
+        deviations on the final pose. The number of links is inferred from the lenght of the DH
+        parameter vectors. All joints are assumed rotational.
+        """
+        assert theta_all.size == d_all.size == r_all.size == alpha_all.size, "All parameter vectors must have same length"
+        num_links = theta_all.size
+
+        J1 = np.zeros((3, num_links))
+        J2 = np.zeros((3, num_links))
+        J3 = np.zeros((3, num_links))
+        J4 = np.zeros((3, num_links))
+        J5 = np.zeros((3, num_links))
+        J6 = np.zeros((3, num_links))
+
+        # Total chain
+        T_tot_1 = self.get_T_jk(0, num_links, q1, theta_all, d_all, r_all, alpha_all)
+        T_tot_2 = self.get_T_jk(0, num_links, q2, theta_all, d_all, r_all, alpha_all)
+        t_tot_1 = T_tot_1[0:3, 3]
+        t_tot_2 = T_tot_2[0:3, 3]
+
+
+        for i in range(num_links):  # iterate over the links of the robot (0, 1, ..., num_links-1)
+        # Branch A
+            # parameters for current link
+            theta = theta_all[i] + q1[i]
+            d = d_all[i]
+            r = r_all[i]
+            alpha = alpha_all[i]
+            # coordinate transform for current link
+            T = self.get_T_jk(0, i, q1, theta_all, d_all, r_all, alpha_all)
+            t = T[0:3, 3]
+            R = T[0:3, 0:3]
+
+            # compute vectors vi
+            v_1 = np.array([0, - d * m.cos(alpha), - d * m.sin(alpha)])
+            v_2 = np.array([1, 0, 0])
+            v_3 = np.array([0, - m.sin(alpha), m.cos(alpha)])
+
+            # compute vectors that make up columns of Jacobian
+            j_1 = R @ v_1 + np.cross(t, (R @ v_3))
+            j_2 = R @ v_2
+            j_3 = R @ v_3
+            j_4 = np.cross(t, (R @ v_2))
+            j_5 = np.cross(j_3, t_tot_1) + j_1
+            j_6 = np.cross(j_2, t_tot_1) + j_4
+
+            # change base to 7A and add vectors to jacobian with negative sign
+            # Basiswechselmatrix ist R_7A^0
+            R_7A0 = np.linalg.inv(T_tot_1)[0:3, 0:3]
+            J1[:, i] -= R_7A0 @ j_1
+            J2[:, i] -= R_7A0 @ j_2
+            J3[:, i] -= R_7A0 @ j_3
+            J4[:, i] -= R_7A0 @ j_4
+            J5[:, i] -= R_7A0 @ j_5
+            J6[:, i] -= R_7A0 @ j_6
+
+        # Branch B
+            # parameters for current link
+            theta = theta_all[i] + q2[i]
+            d = d_all[i]
+            r = r_all[i]
+            alpha = alpha_all[i]
+            # coordinate transform for current link
+            T = self.get_T_jk(0, i, q2, theta_all, d_all, r_all, alpha_all)
+            t = T[0:3, 3]
+            R = T[0:3, 0:3]
+
+            # compute vectors vi
+            v_1 = np.array([0, - d * m.cos(alpha), - d * m.sin(alpha)])
+            v_2 = np.array([1, 0, 0])
+            v_3 = np.array([0, - m.sin(alpha), m.cos(alpha)])
+
+            # compute vectors that make up columns of Jacobian
+            j_1 = R @ v_1 + np.cross(t, (R @ v_3))
+            j_2 = R @ v_2
+            j_3 = R @ v_3
+            j_4 = np.cross(t, (R @ v_2))
+            j_5 = np.cross(j_3, t_tot_2) + j_1
+            j_6 = np.cross(j_2, t_tot_2) + j_4
+
+            # change base to 7A and add vectors to jacobian with negative sign
+            # Basiswechselmatrix ist R_7B^0
+            R_7B0 = np.linalg.inv(T_tot_2)[0:3, 0:3]
+            J1[:, i] += R_7B0 @ j_1
+            J2[:, i] += R_7B0 @ j_2
+            J3[:, i] += R_7B0 @ j_3
+            J4[:, i] += R_7B0 @ j_4
+            J5[:, i] += R_7B0 @ j_5
+            J6[:, i] += R_7B0 @ j_6
+
+        J = np.zeros((6, 4 * num_links))
+        J0 = np.zeros((3, num_links))
+        J[0:3, :] = np.concatenate((J5, J2, J3, J6), axis=1)  # upper part of Jacobian is for differential translation
+        J[3:6, :] = np.concatenate((J3, J0, J0, J2), axis=1)  # lower part is for differential rotation
+        return J
+
+    def get_parameter_jacobian_single(self, q, theta_all, d_all, r_all, alpha_all) -> np.array:
+        """
+        Get the parameter jacobian, that is the matrix approximating the effect of parameter (DH)
+        deviations on the final pose. The number of links is inferred from the lenght of the DH
+        parameter vectors. All joints are assumed rotational.
+        """
+        assert theta_all.size == d_all.size == r_all.size == alpha_all.size, "All parameter vectors must have same length"
+        num_links = theta_all.size
+
+        J1 = np.zeros((3, num_links))
+        J2 = np.zeros((3, num_links))
+        J3 = np.zeros((3, num_links))
+        J4 = np.zeros((3, num_links))
+        J5 = np.zeros((3, num_links))
+        J6 = np.zeros((3, num_links))
+
+        # Total chain
+        # T_tot = self.get_T_jk(0, num_links, q, theta_all, d_all, r_all, alpha_all)
+        # R_tot = T_tot[0:3, 0:3]
+        # t_tot = T_tot[0:3, 3]
+
+        for i in range(num_links):  # iterate over the links of the robot (0, 1, ..., num_links-1)
+            theta = theta_all[i] + q[i]
+            d = d_all[i]
+            r = r_all[i]
+            alpha = alpha_all[i]
+            # coordinate transform for current link
+            T = self.get_T_jk(num_links, i + 1, q, theta_all, d_all, r_all, alpha_all)
+            t = T[0:3, 3]
+            R = T[0:3, 0:3]
+
+            # compute vectors ui
+            u_1 = np.array([m.cos(theta), - m.sin(theta), 0])
+            u_2 = np.array([0, 0, 1])
+            u_3 = np.array([- r * m.sin(theta), - r * m.cos(theta), 0])
+
+            # compute vectors that make up columns of Jacobian
+            j_1 = np.cross(t, (R @ u_2))
+            j_2 = R @ u_1
+            j_3 = R @ u_2
+            j_4 = np.cross(t, (R @ u_1)) + R @ u_3
+
+            # add vectors to columns
+            J1[:, i] = j_1
+            J2[:, i] = j_2
+            J3[:, i] = j_3
+            J4[:, i] = j_4
+            # J5[:, i] = j_5
+            # J6[:, i] = j_6
+
+        J = np.zeros((6, 4 * num_links))
+        J0 = np.zeros((3, num_links))
+        J[0:3, :] = np.concatenate((J1, J2, J3, J4), axis=1)  # upper part of Jacobian is for differential translation
+        J[3:6, :] = np.concatenate((J3, J0, J0, J2), axis=1)  # lower part is for differential rotation
+        return J
 
     def process_measurement(self, m):
         # calculate the poses of the camera based on the nominal 
