@@ -3,10 +3,12 @@ import random
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import math as m
 from parameter_estimator import ParameterEstimator
 from mpl_toolkits.mplot3d import axes3d
 import utils
 from itertools import combinations
+from scipy.spatial.transform import Rotation
 from pytransform3d import rotations as pr
 from pytransform3d import transformations as pt
 from pytransform3d.transform_manager import TransformManager
@@ -25,7 +27,6 @@ r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,))
 d_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,)), np.zeros(1)))
 alpha_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.001, size=(6,)), np.zeros(1)))
 theta_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.001, size=(6,)), np.zeros(1)))
-# print(r_error)
 
 r_nom = r_nom + r_error
 theta_nom = theta_nom + theta_error

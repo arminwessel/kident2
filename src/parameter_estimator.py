@@ -93,7 +93,7 @@ class ParameterEstimator:
     def get_parameter_jacobian_improved(self, q1, q2, theta_all, d_all, r_all, alpha_all) -> np.array:
         """
         Get the parameter jacobian, that is the matrix approximating the effect of parameter (DH)
-        deviations on the final pose. The number of links is inferred from the lenght of the DH
+        deviations on the final pose. The number of links is inferred from the length of the DH
         parameter vectors. All joints are assumed rotational.
         """
         assert theta_all.size == d_all.size == r_all.size == alpha_all.size, "All parameter vectors must have same length"
@@ -184,7 +184,6 @@ class ParameterEstimator:
         J[0:3, :] = np.concatenate((J5, J2, J3, J6), axis=1)  # upper part of Jacobian is for differential translation
         J[3:6, :] = np.concatenate((J3, J0, J0, J2), axis=1)  # lower part is for differential rotation
         return J
-
 
     def process_measurement(self, m):
         # calculate the poses of the camera based on the nominal 
