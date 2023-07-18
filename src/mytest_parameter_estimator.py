@@ -33,8 +33,7 @@ theta_nom = theta_nom + theta_error
 alpha_nom = alpha_nom + alpha_error
 d_nom = d_nom + d_error
 
-observations_file_str = 'observations_small.p'
-    #"obs_few_markers_15_06_0645.bag_20230615-070401.p"
+observations_file_str = 'observations_fake.p'
 observations_file = open(observations_file_str, 'rb')
 # dump information to that file
 observations = pickle.load(observations_file)
