@@ -61,7 +61,7 @@ class MoveRobot:
 # Node
 if __name__ == "__main__":
     rospy.init_node('move_iiwa')
-    eps = 10 * np.pi / 180 # precision for norm of difference bw q and q_desired
+    eps = 3 * np.pi / 180 # precision for norm of difference bw q and q_desired
 
     mover = MoveRobot(traj_file="/home/armin/catkin_ws/src/kident2/src/traj.csv")
     rate = rospy.Rate(1) # rate in Hz
@@ -75,7 +75,7 @@ if __name__ == "__main__":
             q_current = q_current_msg.data
             diff = np.array(q_desired)-np.array(q_current)
             test = np.linalg.norm(diff)
-            rospy.logerr("diff = {}".format(test))
+            # rospy.logerr("diff = {}".format(test))
             if np.linalg.norm(diff) < eps:
                 break
             rate.sleep()

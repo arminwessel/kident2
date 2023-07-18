@@ -6,7 +6,7 @@ import rospy
 import ros_numpy
 from sensor_msgs.msg import Image, CameraInfo
 from kident2.srv import Get_q, Get_qResponse
-from kident2.msg import DiffMeasurement
+from kident2.msg import DiffMeasurement, Pose
 from collections import deque
 import random
 import utils
@@ -23,6 +23,7 @@ class MarkerBasedTracker:
     def __init__(self, aruco_marker_length=0.12, cam_matrix=np.eye(3), camera_distortion=np.zeros(5)) -> None:
         # data for aruco estimation to be moved to rosparam from constructor
 
+
         self.sub_camera_image = rospy.Subscriber("/r1/camera/image",
                                                  Image,
                                                  self.image_received)
@@ -37,6 +38,8 @@ class MarkerBasedTracker:
         self.camera_matrix = cam_matrix
         self.camera_distortion = camera_distortion
         self.locked = False
+        self.cv_image = None
+        self.cv_image_timestamp = None
 
         rospy.loginfo("Tracker waiting for service get_q_interp")
         rospy.wait_for_service('get_q_interp')
@@ -47,21 +50,18 @@ class MarkerBasedTracker:
         self.num_observations = 0
 
         self.pub_meas = rospy.Publisher("diff_meas", DiffMeasurement, queue_size=20)
+        self.pub_obs = rospy.Publisher("aruco_obs", Pose, queue_size=20)
         rospy.loginfo("Tracker initialized")
 
     def image_received(self, image_message: Image) -> None:
         """
-        Method executed for every frame: get marker observations and joint coordinates
+        Method executed for every frame
         """
         if self.locked:
             return
-        t = image_message.header.stamp.to_sec()
-        cv_image = ros_numpy.numpify(image_message)  # convert image to np array
-        res = self.get_q_interp_proxy(t)  # service call to iiwa_handler to interp q(t)
-        q = np.array(res.q)
-        if q.size == 0:
-            return  # if interpolation was not successful, dont observe the markers
-        self.observe_markers(cv_image, t, q)  # adds observations to queue
+        self.cv_image_timestamp = image_message.header.stamp.to_sec()
+        self.cv_image = ros_numpy.numpify(image_message)  # convert image to np array
+
 
 
     def observe_markers(self, frame, t, q) -> None:
@@ -118,7 +118,7 @@ class MarkerBasedTracker:
                    "t": t,
                    "q": q}
             self.num_observations += 1 # count observations
-            print(f"Number of observations: {self.num_observations}")
+            # print(f"Number of observations: {self.num_observations}")
 
             if not id in self.observations:  # if this id was not yet used initialize queue for it
                 self.observations[id] = deque(maxlen=50)
@@ -146,8 +146,8 @@ class MarkerBasedTracker:
         # if (np.abs(timediff) > 0.1):  # more than three frames means data is too old, 0.03 s bw frames
         #     rospy.logwarn("Measurement dropped, time bw obs was too much with {} s".format(timediff))
         #     return
-        H1 = utils.H(obs1["rvec"], obs1["tvec"])
-        H2 = utils.H(obs2["rvec"], obs2["tvec"])
+        H1 = utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"])
+        H2 = utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"])
         H1i, H2i = np.linalg.inv(H1), np.linalg.inv(H2)
         test = H1i[0:3, 3]
         test2 = H2i[0:3, 3]
@@ -185,25 +185,32 @@ if __name__ == "__main__":
     camera_matrix = np.array(data.K)
     camera_matrix = np.reshape(camera_matrix, (3, 3))
     rospy.loginfo('Launching Marker-Based Tracker')
-    tracker = MarkerBasedTracker(aruco_marker_length=0.12, cam_matrix=camera_matrix, camera_distortion=np.zeros(5))
-
-    while not rospy.is_shutdown():
-        # if tracker.num_observations > 1000:
+    tracker = MarkerBasedTracker(aruco_marker_length=0.40, cam_matrix=camera_matrix, camera_distortion=np.zeros(5))
+    tracker.cv_image = rospy.wait_for_message('/r1/camera/image', Image)
+    rate = rospy.Rate(5)  # ROS Rate at 5Hz
+    not_done = True
+    while not rospy.is_shutdown() and not_done:
+        tracker.locked = True
+        res = tracker.get_q_interp_proxy(tracker.cv_image_timestamp)  # service call to iiwa_handler to interp q(t)
+        q = np.array(res.q)
+        tracker.observe_markers(tracker.cv_image, tracker.cv_image_timestamp, q)  # adds observations to queue
+        tracker.process_observations()
+        tracker.locked = False
         num_markers = len(tracker.observations.keys())
         print(f"Num markers: {num_markers}")
-        # if tracker.num_observations > 50:
-        if num_markers > 100:
-            tracker.locked = True
-            import pickle
-            # open a file to store data
-            observations_file_str = "observations_big.p"
-            observations_file = open(observations_file_str, 'wb')
-            # dump information to that file
-            pickle.dump(tracker.observations, observations_file)
-            # close the file
-            observations_file.close()
-            print("done")
-            break
-        else:
-            rospy.sleep(0.5)
-        #tracker.process_observations()
+        if tracker.num_observations > 50:
+            if num_markers > 15:
+                tracker.locked = True
+                import pickle
+                # open a file to store data
+                observations_file_str = "observations_large.p"
+                observations_file = open(observations_file_str, 'wb')
+                # dump information to that file
+                pickle.dump(tracker.observations, observations_file)
+                # close the file
+                observations_file.close()
+                print("done")
+                not_done = False
+            else:
+                rate.sleep()
+

@@ -6,6 +6,13 @@ import time
 from kident2.msg import Array_f64
 from kident2.srv import Get_qResponse, Get_q
 import numpy as np
+import tf
+from parameter_estimator import ParameterEstimator
+import utils
+from scipy.spatial.transform import Rotation as R
+from geometry_msgs.msg import Transform, Vector3, Quaternion
+from geometry_msgs.msg import TransformStamped
+from std_msgs.msg import Header
 
 
 class IiwaHandler:
@@ -31,6 +38,8 @@ class IiwaHandler:
         self.sub_q_desired = rospy.Subscriber("q_desired", Array_f64, self.move_jointspace)
 
         self.qs = deque(maxlen=10000)
+        self.brs = [tf.TransformBroadcaster() for i in range(8)]
+        # self.br = tf.TransformBroadcaster()
 
     def readout_q(self) -> None:
         """
@@ -102,6 +111,56 @@ class IiwaHandler:
         except:
             rospy.logerr("could not close udp socket")
 
+    def broadcast_tf(self):
+        names = [f'r1/dh_link_{i}' for i in range(15)]
+        theta_nom = ParameterEstimator.dhparams["theta_nom"]
+        d_nom = ParameterEstimator.dhparams["d_nom"]
+        r_nom = ParameterEstimator.dhparams["r_nom"]
+        alpha_nom = ParameterEstimator.dhparams["alpha_nom"]
+        qs, t = self.qs[-1]
+        qs = qs.flatten()
+        qs = np.append(qs, np.zeros(1))
+        for (i, q) in enumerate(qs):  # iterate over latest set of joint values
+            theta = theta_nom[i]
+            d = d_nom[i]
+            r = r_nom[i]
+            alpha = alpha_nom[i]
+            T = ParameterEstimator.get_T_i_forward(q, theta, d, r, alpha)
+            quat = tf.transformations.quaternion_from_matrix(T)
+            translation = T[0:3, 3]
+            # ret = self.brs[i].sendTransform(trans,
+            #                       quat,
+            #                       rospy.Time.now(),
+            #                       names[i+1],
+            #                       names[i])
+            trans = Transform(translation=Vector3(*translation.tolist()),
+                              rotation=Quaternion(*quat.tolist())
+                              )
+
+            header = Header()
+            header.stamp = rospy.Time.now()
+            header.frame_id = names[i]  # the parent link
+            # I use the stamped msg signature call to prevent the order confusion
+            trans_stamp = TransformStamped(header, names[i+1], trans)
+            self.brs[i].sendTransformMessage(trans_stamp)
+
+        T_corr = np.array([[0, 0, 1, 0],
+                           [-1, 0, 0, 0],
+                           [0, -1, 0, 0],
+                           [0, 0, 0, 1]])  # euler [ x: -np.pi/2, y: np.pi/2, z: 0 ]
+
+        T_W0 = np.array([[-1, 0, 0, 0],
+                         [0, -1, 0, 0],
+                         [0, 0, 1, 0.36],
+                         [0, 0, 0, 1]])
+        quat_W0 = tf.transformations.quaternion_from_matrix(T_W0)
+        translation_W0 = T_W0[0:3, 3]
+        self.brs[i].sendTransform(translation_W0,
+                              quat_W0,
+                              rospy.Time.now(),
+                              'r1/dh_link_0',
+                              'r1/world')
+
 
 # Node
 if __name__ == "__main__":
@@ -109,7 +168,7 @@ if __name__ == "__main__":
     handler = IiwaHandler()
     rospy.on_shutdown(handler.release_udp_socket)
 
-    rate = rospy.Rate(1000) # rate of readout
+    rate = rospy.Rate(10) # rate of readout
     while not rospy.is_shutdown():
         # slot 1/4
         handler.readout_q()
@@ -126,5 +185,6 @@ if __name__ == "__main__":
         # slot 4/4
         handler.readout_q()
         handler.publish_q()  # publish q on every fourth passing
+        handler.broadcast_tf()
         rate.sleep()
 

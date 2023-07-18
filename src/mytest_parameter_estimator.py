@@ -18,22 +18,23 @@ r_nom = ParameterEstimator.dhparams["r_nom"].astype(float)
 d_nom = ParameterEstimator.dhparams["d_nom"].astype(float)
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 
-# theta_error = np.array([0, 0, 0, 0, 0, 0, 0])
-# r_error = np.array([0, 0, 0, 0, 0, 0, 0])
-# d_error = np.array([0, 0, 0, 0, 0, 0, 0])
-# alpha_error = np.array([0, 0, 0, 0, 0, 0, 0])
+theta_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+r_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+d_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+alpha_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
 
-r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,)), np.zeros(1)))
-d_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,)), np.zeros(1)))
-alpha_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.001, size=(6,)), np.zeros(1)))
-theta_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.001, size=(6,)), np.zeros(1)))
+# r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,)), np.zeros(1)))
+# d_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,)), np.zeros(1)))
+# alpha_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.001, size=(6,)), np.zeros(1)))
+# theta_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.001, size=(6,)), np.zeros(1)))
 
 r_nom = r_nom + r_error
 theta_nom = theta_nom + theta_error
 alpha_nom = alpha_nom + alpha_error
 d_nom = d_nom + d_error
 
-observations_file_str = "observations_fake.p"
+observations_file_str = 'observations_small.p'
+    #"obs_few_markers_15_06_0645.bag_20230615-070401.p"
 observations_file = open(observations_file_str, 'rb')
 # dump information to that file
 observations = pickle.load(observations_file)

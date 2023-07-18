@@ -225,7 +225,6 @@ class ParameterEstimator:
         msg.time = rospy.get_time()
         self.pub_est.publish(msg)
 
-
 class RLS:
     def __init__(self, num_params, q, alpha=1e3) -> None:
         """

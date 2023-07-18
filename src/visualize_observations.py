@@ -16,7 +16,9 @@ r_nom = ParameterEstimator.dhparams["r_nom"]
 d_nom = ParameterEstimator.dhparams["d_nom"]
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"]
 
-observations_file_str = "observations_fake.p"
+observations_file_str = 'obs_few_markers_15_06_0645.bag_20230615-070401.p'
+#observations_file_str = "observations_big.p"
+
 observations_file = open(observations_file_str, 'rb')
 
 # dump information to that file
