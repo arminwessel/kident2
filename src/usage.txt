@@ -1,0 +1,7 @@
+roslaunch arc_gazebo iiwa_armin_few_markers.launch gui:=false
+ 
+roslaunch arc_gazebo iiwa.rviz.launch
+
+rosrun kident2 iiwa_handler.py
+
+rosrun kident2 move_iiwa.py
