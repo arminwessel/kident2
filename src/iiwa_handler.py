@@ -13,6 +13,9 @@ from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import Transform, Vector3, Quaternion
 from geometry_msgs.msg import TransformStamped
 from std_msgs.msg import Header
+from std_srvs.srv import Empty, EmptyResponse
+import pandas as pd
+import sys, select, termios, tty
 
 
 class IiwaHandler:
@@ -23,7 +26,7 @@ class IiwaHandler:
     upon request returns the interpolated value of the joints for a given time
     """
 
-    def __init__(self) -> None:
+    def __init__(self, traj_file) -> None:
         self.netif_addr = '127.0.0.1'  # loopback to gazebo
         # netif_addr = '192.168.1.3'
         try:
@@ -35,19 +38,35 @@ class IiwaHandler:
 
         self.pub_q = rospy.Publisher("iiwa_q", Array_f64, queue_size=20)
         self.serv_q = rospy.Service('get_q_interp', Get_q, self.get_q_interpolated)
-        self.sub_q_desired = rospy.Subscriber("q_desired", Array_f64, self.move_jointspace)
+        self.serv_next = rospy.Service('next_move', Empty, self.move_next_point)
+        self.serv_print_state = rospy.Service('print_robot_state', Empty, self.print_robot_state)
+        self.k = 0
+        self.forward = True
+        try:
+            df = pd.read_csv(traj_file)
+        except:
+            rospy.logerr("Could not load trajectory from {}".format(traj_file))
+        self.traj = df.to_numpy()  # shape: (num_joints, num_traj_points)
+        self.traj = self.traj[:, 1:]  # delete header
 
         self.qs = deque(maxlen=10000)
         self.brs = [tf.TransformBroadcaster() for i in range(8)]
-        # self.br = tf.TransformBroadcaster()
+        self.q_desired = np.zeros(7)
+        self.state = 'init'
+        self.in_motion = False
 
     def readout_q(self) -> None:
         """
         Read raw joint data from iiwa.model
         """
         q_raw = self.iiwa.model.get_q()
+        q_raw_act = self.iiwa.state.get_q_act()
         t = rospy.get_time()
         self.qs.append((q_raw, t))
+
+    def print_robot_state(self, arg):
+        print(self.iiwa.state)
+        return EmptyResponse()
 
     def get_q_interpolated(self, req) -> Get_qResponse:
         """
@@ -98,11 +117,52 @@ class IiwaHandler:
         msg.data, msg.time = self.qs[-1]  # publish newest element
         self.pub_q.publish(msg)
 
-    def move_jointspace(self, msg):
-        q_desired = list(msg.data)
-        time_desired = msg.time
-        t0 = self.iiwa.get_time()
-        self.iiwa.move_jointspace(q_desired, t0, time_desired-t0)
+    def move_next_point(self, arg):
+        if not (self.state == 'ready'):
+            rospy.loginfo('ROBOT NOT READY')
+            return
+        else:
+            self.q_desired = self.traj[:, self.k]
+            rospy.loginfo(f'Point {self.k} of traj is {self.q_desired}')
+            rospy.loginfo('MOVE NEXT Q DESIRED')
+            t0 = self.iiwa.get_time()
+            self.iiwa.move_jointspace(self.q_desired, t0, 5, N_pts=10)  # 5 s trajectory
+            # iterate forwards and backwards over the array
+
+            if self.forward:
+                self.k += 1
+            else:
+                self.k -= 1
+            _, len_traj = np.shape(self.traj)
+            if self.k == len_traj - 1:
+                self.forward = False
+                rospy.loginfo("move_iiwa: REACHED END, GOING BACK")
+            if self.k == 0:
+                self.forward = True
+        return EmptyResponse()
+
+    def check_status(self):
+        q_dot_set = self.iiwa.state.get_q_dot_set()
+        speed = np.sum(np.abs(q_dot_set))
+
+        if speed > 0:
+            # was stopped but now moving
+            if not self.in_motion:
+                rospy.loginfo('READY - > BUSY')
+            self.state = 'busy'
+
+        if self.state == 'busy':
+            if self.in_motion and speed == 0:
+                # was moving but now stopped
+                self.state = 'ready'
+                rospy.loginfo('BUSY - > READY')
+
+        if self.state == 'init':
+            if speed == 0:
+                self.state = 'ready'
+                rospy.loginfo('INIT - > READY')
+        self.in_motion = np.sum(q_dot_set) != 0
+
     
 
     def release_udp_socket(self):
@@ -161,30 +221,19 @@ class IiwaHandler:
                               'r1/dh_link_0',
                               'r1/world')
 
-
 # Node
 if __name__ == "__main__":
     rospy.init_node('iiwa_handler')
-    handler = IiwaHandler()
+    handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/traj.csv")
     rospy.on_shutdown(handler.release_udp_socket)
 
-    rate = rospy.Rate(10) # rate of readout
+    rate = rospy.Rate(10)
+
     while not rospy.is_shutdown():
-        # slot 1/4
-        handler.readout_q()
-        rate.sleep()
-
-        # slot 2/4
-        handler.readout_q()
-        rate.sleep()
-
-        # slot 3/4
-        handler.readout_q()
-        rate.sleep()
-
-        # slot 4/4
         handler.readout_q()
         handler.publish_q()  # publish q on every fourth passing
         handler.broadcast_tf()
+        handler.check_status()
         rate.sleep()
+
 
