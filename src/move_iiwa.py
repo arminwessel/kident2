@@ -4,7 +4,7 @@ import rospy
 import numpy as np
 import itertools
 from kident2.msg import Array_f64
-from std_srvs.srv import Empty, EmptyRequest
+from std_srvs.srv import Trigger, TriggerRequest
 from pathlib import Path
 
 
@@ -15,9 +15,9 @@ class MoveRobot:
     After reaching an end of the trajectory, the direction is reversed
     """
 
-    def __init__(self, traj_file) -> None:
+    def __init__(self) -> None:
         rospy.wait_for_service('next_move')
-        self.request_next_move = rospy.ServiceProxy('next_move', Empty)
+        self.request_next_move = rospy.ServiceProxy('next_move', Trigger)
 
 
 # Node
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     rospy.init_node('move_iiwa')
     mover = MoveRobot()
     rate = rospy.Rate(0.3)  # rate in Hz
-    request = EmptyRequest()
+    request = TriggerRequest()
     while not rospy.is_shutdown():
         mover.request_next_move(request)
         rate.sleep()

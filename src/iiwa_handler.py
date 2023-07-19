@@ -13,7 +13,7 @@ from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import Transform, Vector3, Quaternion
 from geometry_msgs.msg import TransformStamped
 from std_msgs.msg import Header
-from std_srvs.srv import Empty, EmptyResponse
+from std_srvs.srv import Trigger, TriggerResponse, Empty, EmptyResponse
 import pandas as pd
 import sys, select, termios, tty
 
@@ -38,7 +38,7 @@ class IiwaHandler:
 
         self.pub_q = rospy.Publisher("iiwa_q", Array_f64, queue_size=20)
         self.serv_q = rospy.Service('get_q_interp', Get_q, self.get_q_interpolated)
-        self.serv_next = rospy.Service('next_move', Empty, self.move_next_point)
+        self.serv_next = rospy.Service('next_move', Trigger, self.move_next_point)
         self.serv_print_state = rospy.Service('print_robot_state', Empty, self.print_robot_state)
         self.k = 0
         self.forward = True
@@ -120,7 +120,10 @@ class IiwaHandler:
     def move_next_point(self, arg):
         if not (self.state == 'ready'):
             rospy.loginfo('ROBOT NOT READY')
-            return
+            res = TriggerResponse()
+            res.success = False
+            res.message = "ROBOT NOT READY"
+            return res
         else:
             self.q_desired = self.traj[:, self.k]
             rospy.loginfo(f'Point {self.k} of traj is {self.q_desired}')
@@ -139,7 +142,10 @@ class IiwaHandler:
                 rospy.loginfo("move_iiwa: REACHED END, GOING BACK")
             if self.k == 0:
                 self.forward = True
-        return EmptyResponse()
+        res = TriggerResponse()
+        res.success = True
+        res.message = "NEXT POINT REQUESTED"
+        return res
 
     def check_status(self):
         q_dot_set = self.iiwa.state.get_q_dot_set()
