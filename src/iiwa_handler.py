@@ -12,7 +12,8 @@ import utils
 from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import Transform, Vector3, Quaternion
 from geometry_msgs.msg import TransformStamped
-from std_msgs.msg import Header
+from std_msgs.msg import Header, String
+from sensor_msgs.msg import JointState
 from std_srvs.srv import Trigger, TriggerResponse, Empty, EmptyResponse
 import pandas as pd
 import sys, select, termios, tty
@@ -40,6 +41,7 @@ class IiwaHandler:
         self.serv_q = rospy.Service('get_q_interp', Get_q, self.get_q_interpolated)
         self.serv_next = rospy.Service('next_move', Trigger, self.move_next_point)
         self.serv_print_state = rospy.Service('print_robot_state', Empty, self.print_robot_state)
+        self.pub_status = rospy.Publisher("robot_status", String, queue_size=20)
         self.k = 0
         self.forward = True
         try:
@@ -168,6 +170,35 @@ class IiwaHandler:
                 self.state = 'ready'
                 rospy.loginfo('INIT - > READY')
         self.in_motion = np.sum(q_dot_set) != 0
+        msg = String()
+        msg.data = self.state
+        self.pub_status.publish(msg)
+
+    def check_status2(self):
+        _msg = rospy.wait_for_message("r1/joint_states", JointState)
+        speed = np.max(np.abs(np.array(_msg.velocity)))
+        epsilon = 0.0005
+
+        if speed > epsilon:
+            # was stopped but now moving
+            if not self.in_motion:
+                rospy.loginfo('READY - > BUSY')
+            self.state = 'busy'
+
+        if self.state == 'busy':
+            if self.in_motion and speed <= epsilon:
+                # was moving but now stopped
+                self.state = 'ready'
+                rospy.loginfo('BUSY - > READY')
+
+        if self.state == 'init':
+            if speed <= epsilon:
+                self.state = 'ready'
+                rospy.loginfo('INIT - > READY')
+        self.in_motion = speed > epsilon
+        msg = String()
+        msg.data = self.state
+        self.pub_status.publish(msg)
 
     
 
@@ -239,7 +270,7 @@ if __name__ == "__main__":
         handler.readout_q()
         handler.publish_q()  # publish q on every fourth passing
         handler.broadcast_tf()
-        handler.check_status()
+        handler.check_status2()
         rate.sleep()
 
 

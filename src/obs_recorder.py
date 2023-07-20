@@ -12,7 +12,7 @@ input_bag_file = '/home/armin/Desktop/few_markers_15_06_0645.bag'
 sample_rate = 5  # in Hz
 image_topic = '/r1/camera/image'
 q_topic = '/r1/joint_states'
-
+disable_oversampling = True
 
 #############################################
 
@@ -82,7 +82,7 @@ for idx, (topic, msg, t) in enumerate(input_bag.read_messages(topics=q_topic)):
 # for each image in the under-sampled series interpolate the joint coordinates and perform obs
 for idx, (topic, msg, t) in enumerate(input_bag.read_messages(topics=image_topic)):
     # Check if it's time to sample the message
-    if idx % n_undersample == 0:
+    if idx % n_undersample == 0 or disable_oversampling:
         print('processing frame {} of {}'.format(idx, num_frms))
         cv_image_timestamp = msg.header.stamp.to_sec()
         cv2_img = bridge.imgmsg_to_cv2(msg, "bgr8")
