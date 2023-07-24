@@ -20,7 +20,7 @@ alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 
 theta_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
 r_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
-d_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+d_error = np.array([0, 0, 0, 0.05, 0, 0, 0, 0])
 alpha_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
 
 # r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,)), np.zeros(1)))
@@ -74,14 +74,14 @@ for markerid in list(observations)[:]:
     num_observed = 0
     print(f"working on marker {markerid}")
     for obs1, obs2 in combinations(observations[markerid], 2):
-        if num_observed > 50:
+        if num_observed > 500:
             continue
 
         # extract measurements
         q1 = np.hstack((np.array(obs1["q"]), np.zeros(1)))
         q2 = np.hstack((np.array(obs2["q"]), np.zeros(1)))
-        T_CM_1 = T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"])
-        T_CM_2 = T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"])
+        T_CM_1 = T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"]) @ np.linalg.inv(T_corr) @ utils.Ry(-np.pi/2)
+        T_CM_2 = T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"]) @ np.linalg.inv(T_corr) @ utils.Ry(-np.pi/2)
 
         # calculate nominal transforms
         T_08_1 = pe.get_T_jk(0, 8, q1, theta_nom, d_nom, r_nom, alpha_nom)
