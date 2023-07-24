@@ -33,7 +33,7 @@ theta_nom = theta_nom + theta_error
 alpha_nom = alpha_nom + alpha_error
 d_nom = d_nom + d_error
 
-observations_file_str = 'observations_fake.p'
+observations_file_str = 'obs_2007_gazebo_iiwa_stopping.bag_20230720-135812.p'
 observations_file = open(observations_file_str, 'rb')
 # dump information to that file
 observations = pickle.load(observations_file)
