@@ -8,32 +8,36 @@ from parameter_estimator import ParameterEstimator
 from mpl_toolkits.mplot3d import axes3d
 import utils
 from itertools import combinations
+import pandas as pd
 from scipy.spatial.transform import Rotation
 from pytransform3d import rotations as pr
 from pytransform3d import transformations as pt
 from pytransform3d.transform_manager import TransformManager
+f_acin_colors = open('acin_colors.p', 'rb')
+acin_colors = pickle.load(f_acin_colors)
+f_acin_colors.close()
 
 theta_nom = ParameterEstimator.dhparams["theta_nom"].astype(float)
 r_nom = ParameterEstimator.dhparams["r_nom"].astype(float)
 d_nom = ParameterEstimator.dhparams["d_nom"].astype(float)
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 
-theta_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
-r_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
-d_error = np.array([0, 0, 0, 0.05, 0, 0, 0, 0])
-alpha_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+# theta_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+# r_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+# d_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+# alpha_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
 
-# r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,)), np.zeros(1)))
-# d_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.01, size=(6,)), np.zeros(1)))
-# alpha_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.001, size=(6,)), np.zeros(1)))
-# theta_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=0.001, size=(6,)), np.zeros(1)))
+r_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)/250, np.zeros(1)))  # random error in range [-2mm, +2mm)
+d_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)/250, np.zeros(1)))  # random error in range [-2mm, +2mm)
+alpha_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)*np.pi/180*4, np.zeros(1)))  # random error in range [-2deg, +2deg)
+theta_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)*np.pi/180*4, np.zeros(1)))  # random error in range [-2deg, +2deg)
 
 r_nom = r_nom + r_error
 theta_nom = theta_nom + theta_error
 alpha_nom = alpha_nom + alpha_error
 d_nom = d_nom + d_error
 
-observations_file_str = 'obs_2007_gazebo_iiwa_stopping.bag_20230720-135812.p'
+observations_file_str = 'observations_fake2.p'
 observations_file = open(observations_file_str, 'rb')
 # dump information to that file
 observations = pickle.load(observations_file)
@@ -124,6 +128,10 @@ n_tot = 4*8
 colors = np.array(['tab:blue', 'tab:orange', 'tab:green',
                    'tab:red',  'tab:purple', 'tab:olive',
                    'tab:cyan', 'tab:pink',   'tab:brown', 'tab:gray'])
+colors = np.array([acin_colors['acin_red'], acin_colors['acin_green'], acin_colors['acin_yellow'],
+                   acin_colors['TU_blue'], acin_colors['acin_yellow_variant'],
+                   acin_colors['acin_green_variant'], acin_colors['acin_blue_variant'],
+                   acin_colors['TU_pink_variant']])
 if n > colors.size:
     colors = np.random.choice(colors, size=(n,), replace=True, p=None)
 
@@ -133,63 +141,127 @@ param_errors = estimates_k
 axis[0, 0].clear()
 for i in range(n):
     axis[0, 0].plot(X, param_errors[i, :].flatten(), color=colors[i],   label=str(i))
-axis[0, 0].set_title(r'$\Delta$$\theta$')
+axis[0, 0].set_title(r'$\Delta$$\theta [°]$')
 axis[0, 0].legend()
 
 axis[0, 1].clear()
 for i in range(n):
     axis[0, 1].plot(X, param_errors[i+n, :].flatten(), color=colors[i],   label=str(i))
-axis[0, 1].set_title(r'$\Delta$d')
+axis[0, 1].set_title(r'$\Delta$d [mm]')
 axis[0, 1].legend()
 
 axis[1, 0].clear()
 for i in range(n):
     axis[1, 0].plot(X, param_errors[i+2*n, :].flatten(), color=colors[i],   label=str(i))
-axis[1, 0].set_title(r'$\Delta$a')
+axis[1, 0].set_title(r'$\Delta$r [mm]')
 axis[1, 0].legend()
 
 axis[1, 1].clear()
 for i in range(n):
     axis[1, 1].plot(X, param_errors[i+3*n, :].flatten(), color=colors[i],   label=str(i))
-axis[1, 1].set_title(r'$\Delta$$\alpha$')
+axis[1, 1].set_title(r'$\Delta$$\alpha [°]$')
 axis[1, 1].legend()
+#
+# for elem in estimate_k:
+#     print(elem)
+#
+# plt.figure('diffs')
+# plt.plot(diff_k)
+# # mean = np.mean(diff_k)
+# # print(f"mean diff = {mean}")
 
-for elem in estimate_k:
-    print(elem)
-
-plt.figure('diffs')
-plt.plot(diff_k)
-# mean = np.mean(diff_k)
-# print(f"mean diff = {mean}")
-
-fig_curr_est, ax_curr_est = plt.subplots(2, 2)
+fig_curr_est, ax_curr_est = plt.subplots(2, 2, figsize=(6, 6))
+fig_curr_est.tight_layout(pad=2)
 n = 8
 X = [e for e in range(0, n)]
 axis = ax_curr_est
 param_errors = estimates_k
+
 axis[0, 0].clear()
-Y = param_errors[0:n, -1]
-axis[0, 0].scatter(X, -theta_error, c='orange', s=100)
-axis[0, 0].stem(X, Y)
-axis[0, 0].set_title(r'$\Delta$$\theta$')
+
+Y = param_errors[0:n, -1] * 180 / np.pi
+min = np.array(Y).min()*1.1
+max = np.array(Y).max()*1.1
+axis[0, 0].set_ylim([min, max])
+axis[0, 0].scatter(X, -theta_error * 180 / np.pi, c=acin_colors['acin_yellow'], s=100)
+axis[0, 0].set_title(r'$\Delta$$\theta$ [°]')
+axis[0, 0].grid(axis='y', which="major", linewidth=1)
+axis[0, 0].grid(axis='y', which="minor", linewidth=0.2)
+axis[0, 0].tick_params(axis='y', which='minor')
+axis[0, 0].tick_params(axis='y', which='major')
+markerline, stemlines, baseline = axis[0, 0].stem(X, Y)
+plt.setp(markerline, 'color', acin_colors['TU_blue'])
+plt.setp(stemlines, 'color', acin_colors['TU_blue'])
+axis[0, 0].set_xticks([0,1,2,3,4,5,6,7])
 
 axis[0, 1].clear()
-Y = param_errors[n:2*n, -1]
-axis[0, 1].scatter(X, -d_error, c='orange', s=100)
+Y = param_errors[n:2*n, -1] * 1000
+min = np.array(Y).min()*1.1
+max = np.array(Y).max()*1.1
+axis[0, 1].set_ylim([min, max])
+axis[0, 1].scatter(X, -d_error * 1000, c=acin_colors['acin_yellow'], s=100)
 axis[0, 1].stem(X, Y)
-axis[0, 1].set_title(r'$\Delta$d')
+axis[0, 1].set_title(r'$\Delta$d [mm]')
+axis[0, 1].grid(axis='y', which="major", linewidth=1)
+axis[0, 1].grid(axis='y', which="minor", linewidth=0.2)
+axis[0, 1].tick_params(axis='y', which='minor')
+axis[0, 1].tick_params(axis='y', which='major')
+markerline, stemlines, baseline = axis[0, 1].stem(X, Y)
+plt.setp(markerline, 'color', acin_colors['TU_blue'])
+plt.setp(stemlines, 'color', acin_colors['TU_blue'])
+axis[0, 1].set_xticks([0,1,2,3,4,5,6,7])
 
 axis[1, 0].clear()
-Y = param_errors[2*n:3*n, -1]
-axis[1, 0].scatter(X, -r_error, c='orange', s=100)
+Y = param_errors[2*n:3*n, -1] * 1000
+min = np.array(Y).min()*1.1
+max = np.array(Y).max()*1.1
+axis[1, 0].set_ylim([min, max])
+axis[1, 0].scatter(X, -r_error * 1000, c=acin_colors['acin_yellow'], s=100)
 axis[1, 0].stem(X, Y)
-axis[1, 0].set_title(r'$\Delta$r')
+axis[1, 0].set_title(r'$\Delta$r [mm]')
+axis[1, 0].grid(axis='y', which="major", linewidth=1)
+axis[1, 0].grid(axis='y', which="minor", linewidth=0.2)
+axis[1, 0].tick_params(axis='y', which='minor')
+axis[1, 0].tick_params(axis='y', which='major')
+markerline, stemlines, baseline = axis[1, 0].stem(X, Y)
+plt.setp(markerline, 'color', acin_colors['TU_blue'])
+plt.setp(stemlines, 'color', acin_colors['TU_blue'])
+axis[1, 0].set_xticks([0,1,2,3,4,5,6,7])
 
 axis[1, 1].clear()
-Y = param_errors[3*n:4*n, -1]
-axis[1, 1].scatter(X, -alpha_error, c='orange', s=100)
+Y = param_errors[3*n:4*n, -1] * 180 / np.pi
+min = np.array(Y).min()*1.1
+max = np.array(Y).max()*1.1
+axis[1, 1].set_ylim([min, max])
+axis[1, 1].scatter(X, -alpha_error * 180 / np.pi, c=acin_colors['acin_yellow'], s=100)
 axis[1, 1].stem(X, Y)
-axis[1, 1].set_title(r'$\Delta$$\alpha$')
-
+axis[1, 1].set_title(r'$\Delta$$\alpha$ [°]')
+axis[1, 1].grid(axis='y', which="major", linewidth=1)
+axis[1, 1].grid(axis='y', which="minor", linewidth=0.2)
+axis[1, 1].tick_params(axis='y', which='minor')
+axis[1, 1].tick_params(axis='y', which='major')
+markerline, stemlines, baseline = axis[1, 1].stem(X, Y)
+plt.setp(markerline, 'color', acin_colors['TU_blue'])
+plt.setp(stemlines, 'color', acin_colors['TU_blue'])
+axis[1, 1].set_xticks([0,1,2,3,4,5,6,7])
+plt.savefig("ex10_data.pdf", format="pdf", bbox_inches="tight")
 plt.show()
+
+
+df = pd.DataFrame()
+df['theta_error'] = (theta_error * 180 / np.pi).round(4)
+df['r_error'] = (r_error * 1000).round(4)
+df['d_error'] = (d_error * 1000).round(4)
+df['alpha_error'] = (alpha_error * 180 / np.pi).round(4)
+df['theta_error_m'] = (param_errors[0:n, -1] * 180 / np.pi).round(4)
+df['r_error_m'] = (param_errors[2*n:3*n, -1] * 1000).round(4)
+df['d_error_m'] = (param_errors[n:2*n, -1] * 1000).round(4)
+df['alpha_error_m'] = (param_errors[3*n:4*n, -1] * 180 / np.pi).round(4)
+df.to_csv('exp10_data.csv',
+          columns=['theta_error', 'theta_error_m', 'd_error', 'd_error_m', 'r_error', 'r_error_m', 'alpha_error', 'alpha_error_m'],
+          header=True,
+          index_label='id',
+          float_format="%.3f"
+          )
+
 print("done")
