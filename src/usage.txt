@@ -5,3 +5,5 @@ roslaunch arc_gazebo iiwa.rviz.launch
 rosrun kident2 iiwa_handler.py
 
 rosrun kident2 move_iiwa.py
+
+rostopic pub /goto_q_desired kident2/Array_f64 "{data:[0,1.57,0,0,0,0,0]}"

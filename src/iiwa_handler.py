@@ -42,6 +42,7 @@ class IiwaHandler:
         self.serv_next = rospy.Service('next_move', Trigger, self.move_next_point)
         self.serv_print_state = rospy.Service('print_robot_state', Empty, self.print_robot_state)
         self.pub_status = rospy.Publisher("robot_status", String, queue_size=20)
+        self.sub_q_desired = rospy.Subscriber('goto_q_desired', Array_f64, self.move_specific_point)
         self.k = 0
         self.forward = True
         try:
@@ -149,6 +150,20 @@ class IiwaHandler:
         res.message = "NEXT POINT REQUESTED"
         return res
 
+    def move_specific_point(self, msg):
+        q = msg.data
+        if not (self.state == 'ready'):
+            rospy.loginfo('ROBOT NOT READY')
+        else:
+            self.q_desired = q
+            rospy.loginfo(f'Point from topic goto_q_desired {q}')
+            rospy.loginfo('MOVE NEXT Q DESIRED')
+            t0 = self.iiwa.get_time()
+            self.iiwa.move_jointspace(self.q_desired, t0, 5, N_pts=10)  # 5 s trajectory
+            # iterate forwards and backwards over the array
+
+
+
     def check_status(self):
         q_dot_set = self.iiwa.state.get_q_dot_set()
         speed = np.sum(np.abs(q_dot_set))
@@ -177,7 +192,7 @@ class IiwaHandler:
     def check_status2(self):
         _msg = rospy.wait_for_message("r1/joint_states", JointState)
         speed = np.max(np.abs(np.array(_msg.velocity)))
-        epsilon = 0.0005
+        epsilon = 0.005
 
         if speed > epsilon:
             # was stopped but now moving
@@ -241,10 +256,10 @@ class IiwaHandler:
             trans_stamp = TransformStamped(header, names[i+1], trans)
             self.brs[i].sendTransformMessage(trans_stamp)
 
-        T_corr = np.array([[0, 0, 1, 0],
-                           [-1, 0, 0, 0],
-                           [0, -1, 0, 0],
-                           [0, 0, 0, 1]])  # euler [ x: -np.pi/2, y: np.pi/2, z: 0 ]
+        # T_corr = np.array([[0, 0, 1, 0],
+        #                    [-1, 0, 0, 0],
+        #                    [0, -1, 0, 0],
+        #                    [0, 0, 0, 1]])  # euler [ x: -np.pi/2, y: np.pi/2, z: 0 ]
 
         T_W0 = np.array([[-1, 0, 0, 0],
                          [0, -1, 0, 0],
