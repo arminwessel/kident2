@@ -10,6 +10,8 @@ import utils
 from itertools import combinations
 import pandas as pd
 import random
+import time
+from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
 from pytransform3d import rotations as pr
 from pytransform3d import transformations as pt
@@ -23,10 +25,16 @@ r_nom = ParameterEstimator.dhparams["r_nom"].astype(float)
 d_nom = ParameterEstimator.dhparams["d_nom"].astype(float)
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 
-theta_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
-r_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
-d_error = np.array([0, 0, 0, 0, 0, 0, 0, 0.0005])
-alpha_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+theta_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])*np.pi/180
+r_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])/1000
+d_error = np.array([0, 0, 0.05, 0, 0, 0, 0, 0])/1000
+alpha_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])*np.pi/180
+
+# theta_error = np.array([0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0])*np.pi/180
+# r_error = np.array([0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0])/1000
+# d_error = np.array([0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07])/1000
+# alpha_error = np.array([0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07])*np.pi/180
+
 
 # r_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)/500, np.zeros(1)))  # random error in range [-1mm, +1mm)
 # d_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)/500, np.zeros(1)))  # random error in range [-1mm, +1mm)
@@ -42,6 +50,16 @@ alpha_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])
 # d_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)/5000, np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
 # alpha_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)*np.pi/1800*2, np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
 # theta_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)*np.pi/1800*2, np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
+
+sigma_r = 0.03
+sigma_d = 0
+sigma_alpha = 0
+sigma_theta = 0
+
+r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_r, size=6), np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
+d_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_d, size=6), np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
+alpha_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_alpha, size=6), np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
+theta_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_theta, size=6), np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
 
 r_nom = r_nom + r_error
 theta_nom = theta_nom + theta_error
@@ -70,7 +88,7 @@ observations_file.close()
 # observations_file.close()
 
 pe = ParameterEstimator()
-estimates_k = np.empty((32, 0))
+estimates_k = np.zeros((8*4-6, 1))
 
 T_corr = np.array([[ 0,  0, 1, 0],
                    [-1,  0, 0, 0],
@@ -85,7 +103,11 @@ T_W0 = np.array([[-1, 0, 0, 0],
 # T_7C = utils.Trans(0, 0, 0.281) @ utils.Rz(np.pi)
 
 diff_k = list()
-current_marker = []
+current_marker = [None]
+jacobian_tot = np.zeros((0, 8*4-6))
+errors_tot = np.zeros(0)
+print("Starting loop over observations")
+start_time = time.time()
 for markerid in list(observations)[:]:
     num_observed = 0
     print(f"working on marker {markerid}")
@@ -128,13 +150,48 @@ for markerid in list(observations)[:]:
                                                   r_all=pe.r_nom,
                                                   alpha_all=pe.alpha_nom)
 
-
+        # replace theta_{n+1} and r_{n+1}
+        jacobian[:, 6] = jacobian[:, 6] + jacobian[:, 7]
+        jacobian[:, 22] = jacobian[:, 22] + jacobian[:, 23]
+        # delete non-observable link zeros and the merged camera params
+        jacobian = np.delete(jacobian, [0, 8, 16, 24, 7, 23], 1)
+        # do rls computation
         pe.rls.add_obs(S=jacobian, Y=pose_error)
         estimate_k = pe.rls.get_estimate().flatten()
         estimate_k = np.reshape(np.array(estimate_k), (-1, 1))
         estimates_k = np.hstack((estimates_k, estimate_k))
         num_observed += 1
         current_marker.append(markerid)
+
+        # save jacobian to big jacobian
+        jacobian_tot = np.concatenate((jacobian_tot, jacobian), axis=0)
+        errors_tot = np.concatenate((errors_tot, pose_error), axis=0)
+print(f"Finished loop, it took {time.time() - start_time} seconds")
+_temp = np.concatenate((jacobian_tot, np.reshape(errors_tot, (len(errors_tot), 1))), axis=1)
+np.random.shuffle(_temp)
+jacobian_tot_shuffled = _temp[:, :-1]  # 33rd colum is the error vector concat previously
+errors_tot_shuffled = _temp[:, -1]
+print('test')
+
+
+def residuals(params):
+    global errors_tot, jacobian_tot
+    ret = errors_tot - jacobian_tot @ params
+    return ret
+
+
+print("Start LM Algorithm")
+start_time = time.time()
+# res = least_squares(residuals, estimates_k[:, -1].flatten())
+init_guess = np.concatenate((estimates_k[0:6, -1], np.zeros(13), estimates_k[19:26, -1]))
+# res2 = least_squares(fun=residuals, x0=np.zeros(4*8-6), method='lm')
+res2 = least_squares(fun=residuals, x0=init_guess, method='lm')
+x_lm = res2.x
+print(f"Finished LM, it took {time.time() - start_time} seconds")
+
+diff = estimates_k[:, -1] - x_lm
+print(diff)
+
 
 fig_est, ax_est = plt.subplots(2, 2)
 fig_est.set_size_inches(16, 9, forward=True)
@@ -156,26 +213,30 @@ axis = ax_est
 X = list(range(len(estimates_k[0, :])))
 param_errors = estimates_k
 axis[0, 0].clear()
-for i in range(n):
-    axis[0, 0].plot(X, param_errors[i, :].flatten(), color=colors[i],   label=str(i))
+for i in range(6):
+    Y = param_errors[i, :].flatten() * 180 / np.pi
+    axis[0, 0].plot(X, Y, color=colors[i],   label=str(i))
 axis[0, 0].set_title(r'$\Delta$$\theta [°]$')
 axis[0, 0].legend()
 
 axis[0, 1].clear()
-for i in range(n):
-    axis[0, 1].plot(X, param_errors[i+n, :].flatten(), color=colors[i],   label=str(i))
+for i in range(7):
+    Y = param_errors[i+6, :].flatten() * 1000
+    axis[0, 1].plot(X, Y, color=colors[i],   label=str(i))
 axis[0, 1].set_title(r'$\Delta$d [mm]')
 axis[0, 1].legend()
 
 axis[1, 0].clear()
-for i in range(n):
-    axis[1, 0].plot(X, param_errors[i+2*n, :].flatten(), color=colors[i],   label=str(i))
+for i in range(6):
+    Y = param_errors[i+13, :].flatten() * 1000
+    axis[1, 0].plot(X, Y, color=colors[i],   label=str(i))
 axis[1, 0].set_title(r'$\Delta$r [mm]')
 axis[1, 0].legend()
 
 axis[1, 1].clear()
-for i in range(n):
-    axis[1, 1].plot(X, param_errors[i+3*n, :].flatten(), color=colors[i],   label=str(i))
+for i in range(7):
+    Y = param_errors[i+19, :].flatten() * 180 / np.pi
+    axis[1, 1].plot(X, Y, color=colors[i],   label=str(i))
 axis[1, 1].set_title(r'$\Delta$$\alpha [°]$')
 axis[1, 1].legend()
 
@@ -199,8 +260,9 @@ param_errors = estimates_k
 
 axis[0, 0].clear()
 
-Y1 = param_errors[0:n, -1] * 180 / np.pi
+Y1 = param_errors[0:6, -1] * 180 / np.pi
 Z1 = -theta_error * 180 / np.pi
+X1 = np.arange(1, len(Y1)+1)
 _min = np.concatenate((Y1, Z1)).min()
 _max = np.concatenate((Y1, Z1)).max()
 _abs = max(abs(_min), abs(_max))
@@ -213,14 +275,15 @@ axis[0, 0].grid(axis='y', which="major", linewidth=1)
 axis[0, 0].grid(axis='y', which="minor", linewidth=0.2)
 axis[0, 0].tick_params(axis='y', which='minor')
 axis[0, 0].tick_params(axis='y', which='major')
-markerline, stemlines, baseline = axis[0, 0].stem(X, Y1)
+markerline, stemlines, baseline = axis[0, 0].stem(X1, Y1)
 plt.setp(markerline, 'color', acin_colors['TU_blue'])
 plt.setp(stemlines, 'color', acin_colors['TU_blue'])
 axis[0, 0].set_xticks([0,1,2,3,4,5,6,7])
 
 axis[0, 1].clear()
-Y2 = param_errors[n:2*n, -1] * 1000
+Y2 = param_errors[6:13, -1] * 1000
 Z2 = -d_error * 1000
+X2 = np.arange(1, len(Y2)+1)
 _min = np.concatenate((Y2, Z2)).min()
 _max = np.concatenate((Y2, Z2)).max()
 _abs = max(abs(_min), abs(_max))
@@ -233,14 +296,15 @@ axis[0, 1].grid(axis='y', which="major", linewidth=1)
 axis[0, 1].grid(axis='y', which="minor", linewidth=0.2)
 axis[0, 1].tick_params(axis='y', which='minor')
 axis[0, 1].tick_params(axis='y', which='major')
-markerline, stemlines, baseline = axis[0, 1].stem(X, Y2)
+markerline, stemlines, baseline = axis[0, 1].stem(X2, Y2)
 plt.setp(markerline, 'color', acin_colors['TU_blue'])
 plt.setp(stemlines, 'color', acin_colors['TU_blue'])
 axis[0, 1].set_xticks([0,1,2,3,4,5,6,7])
 
 axis[1, 0].clear()
-Y3 = param_errors[2*n:3*n, -1] * 1000
+Y3 = param_errors[13:19, -1] * 1000
 Z3 = -r_error * 1000
+X3 = np.arange(1, len(Y3)+1)
 _min = np.concatenate((Y3, Z3)).min()
 _max = np.concatenate((Y3, Z3)).max()
 _abs = max(abs(_min), abs(_max))
@@ -253,14 +317,15 @@ axis[1, 0].grid(axis='y', which="major", linewidth=1)
 axis[1, 0].grid(axis='y', which="minor", linewidth=0.2)
 axis[1, 0].tick_params(axis='y', which='minor')
 axis[1, 0].tick_params(axis='y', which='major')
-markerline, stemlines, baseline = axis[1, 0].stem(X, Y3)
+markerline, stemlines, baseline = axis[1, 0].stem(X3, Y3)
 plt.setp(markerline, 'color', acin_colors['TU_blue'])
 plt.setp(stemlines, 'color', acin_colors['TU_blue'])
 axis[1, 0].set_xticks([0,1,2,3,4,5,6,7])
 
 axis[1, 1].clear()
-Y4 = param_errors[3*n:4*n, -1] * 180 / np.pi
+Y4 = param_errors[19:26, -1] * 180 / np.pi
 Z4 = -alpha_error * 180 / np.pi
+X4 = np.arange(1, len(Y4)+1)
 _min = np.concatenate((Y4, Z4)).min()
 _max = np.concatenate((Y4, Z4)).max()
 _abs = max(abs(_min), abs(_max))
@@ -273,7 +338,100 @@ axis[1, 1].grid(axis='y', which="major", linewidth=1)
 axis[1, 1].grid(axis='y', which="minor", linewidth=0.2)
 axis[1, 1].tick_params(axis='y', which='minor')
 axis[1, 1].tick_params(axis='y', which='major')
-markerline, stemlines, baseline = axis[1, 1].stem(X, Y4)
+markerline, stemlines, baseline = axis[1, 1].stem(X4, Y4)
+plt.setp(markerline, 'color', acin_colors['TU_blue'])
+plt.setp(stemlines, 'color', acin_colors['TU_blue'])
+axis[1, 1].set_xticks([0,1,2,3,4,5,6,7])
+plt.savefig("ex10_data.pdf", format="pdf", bbox_inches="tight")
+
+fig_curr_est2, ax_curr_est2 = plt.subplots(2, 2, figsize=(6, 6))
+fig_curr_est2.tight_layout(pad=2)
+n = 8
+X = [e for e in range(0, n)]
+axis = ax_curr_est2
+param_errors = x_lm.reshape((len(x_lm), 1))
+
+axis[0, 0].clear()
+
+Y1 = param_errors[0:6, -1] * 180 / np.pi
+Z1 = -theta_error * 180 / np.pi
+X1 = np.arange(1, len(Y1)+1)
+_min = np.concatenate((Y1, Z1)).min()
+_max = np.concatenate((Y1, Z1)).max()
+_abs = max(abs(_min), abs(_max))
+_min = _min + np.sign(_min)*0.1*_abs  # add a buffer of 10% of the max value on top and on bottom
+_max = _max + np.sign(_max)*0.1*_abs
+axis[0, 0].set_ylim([_min, _max])
+axis[0, 0].scatter(X, Z1, c=acin_colors['acin_yellow'], s=100)
+axis[0, 0].set_title(r'$\Delta$$\theta$ [°]')
+axis[0, 0].grid(axis='y', which="major", linewidth=1)
+axis[0, 0].grid(axis='y', which="minor", linewidth=0.2)
+axis[0, 0].tick_params(axis='y', which='minor')
+axis[0, 0].tick_params(axis='y', which='major')
+markerline, stemlines, baseline = axis[0, 0].stem(X1, Y1)
+plt.setp(markerline, 'color', acin_colors['TU_blue'])
+plt.setp(stemlines, 'color', acin_colors['TU_blue'])
+axis[0, 0].set_xticks([0,1,2,3,4,5,6,7])
+
+axis[0, 1].clear()
+Y2 = param_errors[6:13, -1] * 1000
+Z2 = -d_error * 1000
+X2 = np.arange(1, len(Y2)+1)
+_min = np.concatenate((Y2, Z2)).min()
+_max = np.concatenate((Y2, Z2)).max()
+_abs = max(abs(_min), abs(_max))
+_min = _min + np.sign(_min)*0.1*_abs  # add a buffer of 10% of the max value on top and on bottom
+_max = _max + np.sign(_max)*0.1*_abs
+axis[0, 1].set_ylim([_min, _max])
+axis[0, 1].scatter(X, Z2, c=acin_colors['acin_yellow'], s=100)
+axis[0, 1].set_title(r'$\Delta$d [mm]')
+axis[0, 1].grid(axis='y', which="major", linewidth=1)
+axis[0, 1].grid(axis='y', which="minor", linewidth=0.2)
+axis[0, 1].tick_params(axis='y', which='minor')
+axis[0, 1].tick_params(axis='y', which='major')
+markerline, stemlines, baseline = axis[0, 1].stem(X2, Y2)
+plt.setp(markerline, 'color', acin_colors['TU_blue'])
+plt.setp(stemlines, 'color', acin_colors['TU_blue'])
+axis[0, 1].set_xticks([0,1,2,3,4,5,6,7])
+
+axis[1, 0].clear()
+Y3 = param_errors[13:19, -1] * 1000
+Z3 = -r_error * 1000
+X3 = np.arange(1, len(Y3)+1)
+_min = np.concatenate((Y3, Z3)).min()
+_max = np.concatenate((Y3, Z3)).max()
+_abs = max(abs(_min), abs(_max))
+_min = _min + np.sign(_min)*0.1*_abs  # add a buffer of 10% of the max value on top and on bottom
+_max = _max + np.sign(_max)*0.1*_abs
+axis[1, 0].set_ylim([_min, _max])
+axis[1, 0].scatter(X, Z3, c=acin_colors['acin_yellow'], s=100)
+axis[1, 0].set_title(r'$\Delta$r [mm]')
+axis[1, 0].grid(axis='y', which="major", linewidth=1)
+axis[1, 0].grid(axis='y', which="minor", linewidth=0.2)
+axis[1, 0].tick_params(axis='y', which='minor')
+axis[1, 0].tick_params(axis='y', which='major')
+markerline, stemlines, baseline = axis[1, 0].stem(X3, Y3)
+plt.setp(markerline, 'color', acin_colors['TU_blue'])
+plt.setp(stemlines, 'color', acin_colors['TU_blue'])
+axis[1, 0].set_xticks([0,1,2,3,4,5,6,7])
+
+axis[1, 1].clear()
+Y4 = param_errors[19:26, -1] * 180 / np.pi
+Z4 = -alpha_error * 180 / np.pi
+X4 = np.arange(1, len(Y4)+1)
+_min = np.concatenate((Y4, Z4)).min()
+_max = np.concatenate((Y4, Z4)).max()
+_abs = max(abs(_min), abs(_max))
+_min = _min + np.sign(_min)*0.1*_abs  # add a buffer of 10% of the max value on top and on bottom
+_max = _max + np.sign(_max)*0.1*_abs
+axis[1, 1].set_ylim([_min, _max])
+axis[1, 1].scatter(X, Z4, c=acin_colors['acin_yellow'], s=100)
+axis[1, 1].set_title(r'$\Delta$$\alpha$ [°]')
+axis[1, 1].grid(axis='y', which="major", linewidth=1)
+axis[1, 1].grid(axis='y', which="minor", linewidth=0.2)
+axis[1, 1].tick_params(axis='y', which='minor')
+axis[1, 1].tick_params(axis='y', which='major')
+markerline, stemlines, baseline = axis[1, 1].stem(X4, Y4)
 plt.setp(markerline, 'color', acin_colors['TU_blue'])
 plt.setp(stemlines, 'color', acin_colors['TU_blue'])
 axis[1, 1].set_xticks([0,1,2,3,4,5,6,7])

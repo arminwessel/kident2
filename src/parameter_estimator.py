@@ -39,7 +39,7 @@ class ParameterEstimator:
         self.alpha_nom = ParameterEstimator.dhparams["alpha_nom"]
 
         num_links = self.theta_nom.size
-        self.rls = RLS(4 * num_links, 1)
+        self.rls = RLS(4 * num_links-6, 1)
         self.distances = np.zeros((0,))
 
     @staticmethod
