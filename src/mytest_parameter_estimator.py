@@ -25,10 +25,10 @@ r_nom = ParameterEstimator.dhparams["r_nom"].astype(float)
 d_nom = ParameterEstimator.dhparams["d_nom"].astype(float)
 alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 
-theta_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])*np.pi/180
-r_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])/1000
-d_error = np.array([0, 0, 0.05, 0, 0, 0, 0, 0])/1000
-alpha_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])*np.pi/180
+# theta_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])*np.pi/180
+# r_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])/1000
+# d_error = np.array([0, 0, 0.05, 0, 0, 0, 0, 0])/1000
+# alpha_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])*np.pi/180
 
 # theta_error = np.array([0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0])*np.pi/180
 # r_error = np.array([0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0])/1000
@@ -51,15 +51,22 @@ alpha_error = np.array([0, 0, 0, 0, 0, 0, 0, 0])*np.pi/180
 # alpha_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)*np.pi/1800*2, np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
 # theta_error = np.hstack((np.zeros(1), (np.random.rand(6)-np.ones(6)*0.5)*np.pi/1800*2, np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
 
-sigma_r = 0.03
-sigma_d = 0
-sigma_alpha = 0
-sigma_theta = 0
+# r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_r/1000, size=6), np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
+# d_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_d/1000, size=6), np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
+# alpha_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_alpha/180*np.pi, size=6), np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
+# theta_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_theta/180*np.pi, size=6), np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
 
-r_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_r, size=6), np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
-d_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_d, size=6), np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
-alpha_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_alpha, size=6), np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
-theta_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_theta, size=6), np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
+sigma_r = 0  # in mm
+sigma_d = 0  # in mm
+sigma_alpha = 0  # in degrees
+sigma_theta = 0.1  # in degrees
+
+normal_dist = np.array([ 1.3046512, 0.96882621, 0.15600486, -0.51135905, -0.75806078, 0.82808355])
+
+r_error = np.hstack((np.zeros(1), normal_dist*sigma_r/1000, np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
+d_error = np.hstack((np.zeros(1), normal_dist*sigma_d/1000, np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
+alpha_error = np.hstack((np.zeros(1), normal_dist*sigma_alpha/180*np.pi, np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
+theta_error = np.hstack((np.zeros(1), normal_dist*sigma_theta/180*np.pi, np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
 
 r_nom = r_nom + r_error
 theta_nom = theta_nom + theta_error
@@ -106,6 +113,7 @@ diff_k = list()
 current_marker = [None]
 jacobian_tot = np.zeros((0, 8*4-6))
 errors_tot = np.zeros(0)
+
 print("Starting loop over observations")
 start_time = time.time()
 for markerid in list(observations)[:]:
@@ -117,7 +125,7 @@ for markerid in list(observations)[:]:
         count = count+1
         comparisons.append((obs1, obs2))
     print(f"total number of possible observations: {count}")
-    for obs1, obs2 in random.choices(comparisons, k=50):
+    for obs1, obs2 in random.choices(comparisons, k=2):
 
         # extract measurements
         q1 = np.hstack((np.array(obs1["q"]), np.zeros(1)))
@@ -136,10 +144,10 @@ for markerid in list(observations)[:]:
 
         D_meas = T_CM_1 @ T_MC_2
         D_nom = T_80_1 @ T_08_2
-        delta_D = D_meas @ np.linalg.inv(D_nom) - np.eye(4)
-        drvec, _ = cv2.Rodrigues(delta_D[0:3, 0:3] + np.eye(3))
-        drvec = drvec.flatten()
-        # drvec = np.array([delta_D[2, 1], delta_D[0, 2], delta_D[1, 0]])
+        delta_D = D_meas @ np.linalg.inv(D_nom)
+        delta_D_skew = 0.5 * (delta_D - delta_D.T)
+
+        drvec = np.array([delta_D_skew[2, 1], delta_D_skew[0, 2], delta_D_skew[1, 0]])
         dtvec = delta_D[0:3, 3]
         pose_error = np.concatenate((dtvec, drvec))
 
@@ -150,11 +158,9 @@ for markerid in list(observations)[:]:
                                                   r_all=pe.r_nom,
                                                   alpha_all=pe.alpha_nom)
 
-        # replace theta_{n+1} and r_{n+1}
-        jacobian[:, 6] = jacobian[:, 6] + jacobian[:, 7]
-        jacobian[:, 22] = jacobian[:, 22] + jacobian[:, 23]
         # delete non-observable link zeros and the merged camera params
         jacobian = np.delete(jacobian, [0, 8, 16, 24, 7, 23], 1)
+
         # do rls computation
         pe.rls.add_obs(S=jacobian, Y=pose_error)
         estimate_k = pe.rls.get_estimate().flatten()
@@ -164,14 +170,15 @@ for markerid in list(observations)[:]:
         current_marker.append(markerid)
 
         # save jacobian to big jacobian
+        # jacobian_tot = np.concatenate((jacobian_tot, jacobian, jacobian[3:6, :], jacobian[3:6, :], jacobian[3:6, :], jacobian[3:6, :], jacobian[3:6, :], jacobian[3:6, :]), axis=0)
+        # errors_tot = np.concatenate((errors_tot, pose_error, pose_error[3:6], pose_error[3:6], pose_error[3:6], pose_error[3:6], pose_error[3:6], pose_error[3:6]), axis=0)
         jacobian_tot = np.concatenate((jacobian_tot, jacobian), axis=0)
         errors_tot = np.concatenate((errors_tot, pose_error), axis=0)
 print(f"Finished loop, it took {time.time() - start_time} seconds")
-_temp = np.concatenate((jacobian_tot, np.reshape(errors_tot, (len(errors_tot), 1))), axis=1)
-np.random.shuffle(_temp)
-jacobian_tot_shuffled = _temp[:, :-1]  # 33rd colum is the error vector concat previously
-errors_tot_shuffled = _temp[:, -1]
-print('test')
+# _temp = np.concatenate((jacobian_tot, np.reshape(errors_tot, (len(errors_tot), 1))), axis=1)
+# np.random.shuffle(_temp)
+# jacobian_tot_shuffled = _temp[:, :-1]  # 33rd colum is the error vector concat previously
+# errors_tot_shuffled = _temp[:, -1]
 
 
 def residuals(params):
@@ -182,15 +189,10 @@ def residuals(params):
 
 print("Start LM Algorithm")
 start_time = time.time()
-# res = least_squares(residuals, estimates_k[:, -1].flatten())
-init_guess = np.concatenate((estimates_k[0:6, -1], np.zeros(13), estimates_k[19:26, -1]))
-# res2 = least_squares(fun=residuals, x0=np.zeros(4*8-6), method='lm')
-res2 = least_squares(fun=residuals, x0=init_guess, method='lm')
-x_lm = res2.x
+res = least_squares(fun=residuals, x0=np.zeros(4*8-6), method='lm')
+x_lm = res.x
 print(f"Finished LM, it took {time.time() - start_time} seconds")
 
-diff = estimates_k[:, -1] - x_lm
-print(diff)
 
 
 fig_est, ax_est = plt.subplots(2, 2)
