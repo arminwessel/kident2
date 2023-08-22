@@ -241,6 +241,9 @@ class RLS:
         self.phat = np.zeros((num_params, 1))  # initial guess for parameters, col vector
         self.num_obs = 0
 
+    def reset(self):
+        self.__init__(self.num_params, self.q, self.alpha)
+
     def add_obs(self, S, Y) -> None:
         """
         Add an observation
