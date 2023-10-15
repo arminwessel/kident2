@@ -16,6 +16,12 @@ from scipy.spatial.transform import Rotation
 from pytransform3d import rotations as pr
 from pytransform3d import transformations as pt
 from pytransform3d.transform_manager import TransformManager
+import rospy
+
+from sensor_msgs.msg import PointCloud
+from geometry_msgs.msg import Point32
+import std_msgs.msg
+
 f_acin_colors = open('acin_colors.p', 'rb')
 acin_colors = pickle.load(f_acin_colors)
 f_acin_colors.close()
@@ -56,12 +62,12 @@ alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
 # alpha_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_alpha/180*np.pi, size=6), np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
 # theta_error = np.hstack((np.zeros(1), np.random.normal(loc=0, scale=sigma_theta/180*np.pi, size=6), np.zeros(1)))  # random error in range [-0.1deg, +0.1deg)
 
-sigma_r = 10  # in mm
-sigma_d = 10  # in mm
-sigma_alpha = 10  # in degrees
+sigma_r = 0  # in mm
+sigma_d = 0  # in mm
+sigma_alpha = 0  # in degrees
 sigma_theta = 10  # in degrees
 
-normal_dist = np.array([ 1.3046512, 0.96882621, 0.15600486, -0.51135905, -0.75806078, 0.82808355])
+normal_dist = np.array([1.3046512, 0.96882621, 0.15600486, -0.51135905, -0.75806078, 0.82808355])
 
 r_error = np.hstack((np.zeros(1), normal_dist*sigma_r/1000, np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
 d_error = np.hstack((np.zeros(1), normal_dist*sigma_d/1000, np.zeros(1)))  # random error in range [-0.1mm, +0.1mm)
@@ -73,8 +79,10 @@ theta_nom = theta_nom + theta_error
 alpha_nom = alpha_nom + alpha_error
 d_nom = d_nom + d_error
 
-observations_file_str = 'observations_fake2.p'
-# observations_file_str = 'obs_2007_gazebo_iiwa_stopping.bag_20230720-135812.p'
+# observations_file_str = 'observations_fake.p'
+observations_file_str = 'obs_2007_gazebo_iiwa_stopping.bag_20230720-135812.p'
+# observations_file_str = 'observations_fake_neu.p'
+# observations_file_str = 'obs_2007_gazebo_.p'
 
 observations_file = open(observations_file_str, 'rb')
 # dump information to that file
@@ -99,23 +107,31 @@ observations_file.close()
 pe = ParameterEstimator()
 
 
-T_corr = np.array([[ 0,  0, 1, 0],
+# T_corr = np.array([[ 0,  0, 1, 0],
+#                    [-1,  0, 0, 0],
+#                    [ 0, -1, 0, 0],
+#                    [ 0,  0, 0, 1]]) # euler [ x: -np.pi/2, y: np.pi/2, z: 0 ]
+
+T_corr = np.array([[ 0, -1, 0, 0],
+                   [ 0,  0, 1, 0],
                    [-1,  0, 0, 0],
-                   [ 0, -1, 0, 0],
-                   [ 0,  0, 0, 1]]) # euler [ x: -np.pi/2, y: np.pi/2, z: 0 ]
+                   [ 0,  0, 0, 1]])
 
 T_W0 = np.array([[-1, 0, 0, 0],
                  [0, -1, 0, 0],
                  [0, 0, 1, 0.36],
                  [0, 0, 0, 1]])
+T_W0 = T_W0 @ ParameterEstimator.get_T_i_forward(0, 0, 0, 0, np.pi/2)
 
 # T_7C = utils.Trans(0, 0, 0.281) @ utils.Rz(np.pi)
 
+num_to_ident = 8 * 4 - 4 - 4
+
 diff_k = list()
 current_marker = [None]
-estimates_k = np.zeros((8 * 4 - 6, 1))
+estimates_k = np.zeros((num_to_ident, 1))
 
-
+list_marker_locations = list()
 def residuals(params, errors_tot, jacobian_tot):
     ret = errors_tot - jacobian_tot @ params
     return ret
@@ -126,8 +142,8 @@ def identify(observations, theta, d, r, alpha , k_obs):
 
     # reset rls matrices and LM accumulators
 
-    pe.rls.reset()
-    jacobian_tot = np.zeros((0, 8 * 4 - 6))
+    # pe.rls.reset()
+    jacobian_tot = np.zeros((0, num_to_ident))
     errors_tot = np.zeros(0)
 
     for markerid in list(observations)[:]:
@@ -144,8 +160,8 @@ def identify(observations, theta, d, r, alpha , k_obs):
             # extract measurements
             q1 = np.hstack((np.array(obs1["q"]), np.zeros(1)))
             q2 = np.hstack((np.array(obs2["q"]), np.zeros(1)))
-            T_CM_1 = T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"]) @ np.linalg.inv(T_corr) @ utils.Ry(-np.pi/2)
-            T_CM_2 = T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"]) @ np.linalg.inv(T_corr) @ utils.Ry(-np.pi/2)
+            T_CM_1 = T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"]) @ np.linalg.inv(T_corr)
+            T_CM_2 = T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"]) @ np.linalg.inv(T_corr)
 
             # calculate nominal transforms
             T_08_1 = pe.get_T_jk(0, 8, q1, theta, d, r, alpha)
@@ -155,6 +171,10 @@ def identify(observations, theta, d, r, alpha , k_obs):
             # T_C7 = np.linalg.inv(T_7C)
             T_MC_2 = np.linalg.inv(T_CM_2)
             T_80_1 = np.linalg.inv(T_08_1)
+
+            T_WM_1 = T_W0 @ T_08_1 @ T_CM_1
+            if markerid == 2 or True:
+                list_marker_locations.append([T_WM_1[0, 3], T_WM_1[1, 3], T_WM_1[2, 3]])
 
             D_meas = T_CM_1 @ T_MC_2
             D_nom = T_80_1 @ T_08_2
@@ -173,7 +193,7 @@ def identify(observations, theta, d, r, alpha , k_obs):
                                                       alpha_all=alpha)
 
             # delete non-observable link zeros and the merged camera params
-            jacobian = np.delete(jacobian, [0, 8, 16, 24, 7, 23], 1)
+            jacobian = np.delete(jacobian, [0, 8, 16, 24, 7, 15, 23, 31], 1)
 
             # do rls computation
             # pe.rls.add_obs(S=jacobian, Y=pose_error)
@@ -197,7 +217,7 @@ def identify(observations, theta, d, r, alpha , k_obs):
 
     print("Start LM Algorithm")
     start_time = time.time()
-    res = least_squares(fun=residuals, x0=np.zeros(4*8-6), method='lm', args=(errors_tot, jacobian_tot))
+    res = least_squares(fun=residuals, x0=np.zeros(num_to_ident), method='lm', args=(errors_tot, jacobian_tot))
     x_lm = res.x
     print(f"Finished LM, it took {time.time() - start_time} seconds")
     # return {'rls': estimates_k, 'lm': x_lm}
@@ -207,22 +227,23 @@ theta = theta_nom
 d = d_nom
 r = r_nom
 alpha = alpha_nom
-x = identify(observations, theta, d, r, alpha, 50)
-x = np.reshape(np.array(x), (-1, 1))
-estimates_k = np.hstack((estimates_k, x))
+print("initial values")
 print(f"theta: {theta}\nd: {d}\nr: {r}\nalpha: {alpha}\n\n")
 
-for i in range(10):
+for i in range(8):
     print(f"Iteration {i}")
-    theta = theta + np.concatenate((np.zeros(1), x.flatten()[0:6], np.zeros(1)))
-    d = d + np.concatenate((np.zeros(1), x.flatten()[6:13]))
-    r = r + np.concatenate((np.zeros(1), x.flatten()[13:19], np.zeros(1)))
-    alpha = alpha + np.concatenate((np.zeros(1), x.flatten()[19:26]))
     x = identify(observations, theta, d, r, alpha, 50)
     x = np.reshape(np.array(x), (-1, 1))
     estimates_k = np.hstack((estimates_k, x))
+    theta = theta + np.concatenate((np.zeros(1), x.flatten()[0:6], np.zeros(1)))
+    d = d + np.concatenate((np.zeros(1), x.flatten()[6:12], np.zeros(1)))
+    r = r + np.concatenate((np.zeros(1), x.flatten()[12:18], np.zeros(1)))
+    alpha = alpha + np.concatenate((np.zeros(1), x.flatten()[18:24], np.zeros(1)))
     print(f"theta: {theta}\nd: {d}\nr: {r}\nalpha: {alpha}\n\n")
 
+
+with open('marker_locations.p', 'wb') as f:  # open a text file
+    pickle.dump(list_marker_locations, f) # serialize the list
 
 
 fig_est, ax_est = plt.subplots(2, 2)
@@ -245,7 +266,7 @@ axis = ax_est
 X = list(range(len(estimates_k[0, :])))
 param_errors = estimates_k
 axis[0, 0].clear()
-for i in range(6):
+for i in range(7):
     Y = param_errors[i, :].flatten() * 180 / np.pi
     axis[0, 0].plot(X, Y, color=colors[i],   label=str(i))
 axis[0, 0].set_title(r'$\Delta$$\theta [°]$')
@@ -253,21 +274,21 @@ axis[0, 0].legend()
 
 axis[0, 1].clear()
 for i in range(7):
-    Y = param_errors[i+6, :].flatten() * 1000
+    Y = param_errors[i+7, :].flatten() * 1000
     axis[0, 1].plot(X, Y, color=colors[i],   label=str(i))
 axis[0, 1].set_title(r'$\Delta$d [mm]')
 axis[0, 1].legend()
 
 axis[1, 0].clear()
-for i in range(6):
-    Y = param_errors[i+13, :].flatten() * 1000
+for i in range(7):
+    Y = param_errors[i+14, :].flatten() * 1000
     axis[1, 0].plot(X, Y, color=colors[i],   label=str(i))
 axis[1, 0].set_title(r'$\Delta$r [mm]')
 axis[1, 0].legend()
 
 axis[1, 1].clear()
 for i in range(7):
-    Y = param_errors[i+19, :].flatten() * 180 / np.pi
+    Y = param_errors[i+21, :].flatten() * 180 / np.pi
     axis[1, 1].plot(X, Y, color=colors[i],   label=str(i))
 axis[1, 1].set_title(r'$\Delta$$\alpha [°]$')
 axis[1, 1].legend()

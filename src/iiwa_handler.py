@@ -265,6 +265,7 @@ class IiwaHandler:
                          [0, -1, 0, 0],
                          [0, 0, 1, 0.36],
                          [0, 0, 0, 1]])
+        T_W0 = T_W0 @ ParameterEstimator.get_T_i_forward(0, 0, 0, 0, np.pi/2)
         quat_W0 = tf.transformations.quaternion_from_matrix(T_W0)
         translation_W0 = T_W0[0:3, 3]
         self.brs[i].sendTransform(translation_W0,

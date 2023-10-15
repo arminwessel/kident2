@@ -17,10 +17,22 @@ class ParameterEstimator:
     """
     pip2 = np.pi / 2
     pi = np.pi
-    dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, -pi]),
+    dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, pip2]),
                 "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0]),
-                "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0, 0.281]),
-                "alpha_nom": np.array([0, pip2, -pip2, -pip2, pip2, pip2, -pip2, 0])}
+                "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0.281, 0]),
+                "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, pip2])}
+
+    # Correction matrix for camera
+    T_corr = np.array([[0, -1, 0, 0],
+                       [0, 0, 1, 0],
+                       [-1, 0, 0, 0],
+                       [0, 0, 0, 1]])
+
+    # Transform from world frame to frame 0
+    T_W0 = np.array([[-1, 0, 0, 0],
+                     [0, 0, 1, 0],
+                     [0, 1, 0, 0.36],
+                     [0, 0, 0, 1]])
 
     # dhparams = {"theta_nom": np.array([0, pi, pi, 0, pi, 0, pi]),
     #             "d_nom" : np.array([0.1525, 0.2075, 0.2325, 0.1825, 0.2125, 0.1875, 0.081]),
