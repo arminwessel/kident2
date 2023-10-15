@@ -74,7 +74,7 @@ class InputDataCapture:
         self.q = np.hstack((self.q, np.reshape(q, (self.num_joints, 1))))
 
     def trigger_response(self, request):
-        savefile_name = 'traj.csv'
+        savefile_name = 'traj_captured.csv'
         pd.DataFrame(self.q).to_csv(savefile_name)
         rospy.loginfo("Saved data")
         self.writer.release()

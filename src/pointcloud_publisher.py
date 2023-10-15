@@ -33,7 +33,7 @@ if __name__ == '__main__':
     with open('marker_locations.p', 'rb') as f:
         pointlist2 = pickle.load(f)  # deserialize using load()
 
-    #filling some points
+    #filling points
     for point in np.array(pointlist).T:
         pointcloud.points.append(Point32(point[0], point[1], point[2]))
 
