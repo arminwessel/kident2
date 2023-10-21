@@ -1,5 +1,6 @@
 import pickle
 import numpy as np
+import sympy
 import matplotlib.pyplot as plt
 import pandas as pd
 import math as m
@@ -10,7 +11,8 @@ import random
 import time
 from scipy.optimize import least_squares
 from matplotlib.backends.backend_pdf import PdfPages
-
+from pylatex import Document, NoEscape, Package
+from pathlib import Path
 
 def apply_error_to_params(nominal_values, mask, factor, convert):
     """
@@ -115,7 +117,12 @@ def get_jacobian(observations, theta, d, r, alpha, k_obs):
             jacobian_tot = np.concatenate((jacobian_tot, jacobian), axis=0)
             errors_tot = np.concatenate((errors_tot, pose_error), axis=0)
 
-    return jacobian_tot, errors_tot, list_marker_locations
+    mat_q, mat_r = np.linalg.qr(jacobian_tot)
+    diag_r = np.diagonal(mat_r)
+    rank = np.linalg.matrix_rank(jacobian_tot)
+    jacobian_quality = {'qr_criterion': diag_r, 'rank': rank}
+
+    return jacobian_tot, errors_tot, list_marker_locations, jacobian_quality
 
 
 def asSpherical(x, y, z):
@@ -134,7 +141,7 @@ def asCartesian(r, theta, phi):
     return x, y, z
 
 
-def identify(observations, k_obs, expected_parameters, parameter_id_masks):
+def identify(observations, k_obs, expected_parameters, parameter_id_masks, method='lm'):
     """
     Function estimating the parameter error based on a linear model
 
@@ -156,7 +163,7 @@ def identify(observations, k_obs, expected_parameters, parameter_id_masks):
     positions = np.arange(num_params)
 
     # calculate jacobian
-    jacobian_tot, errors_tot, list_marker_locations = get_jacobian(observations, theta, d, r, alpha, k_obs)
+    jacobian_tot, errors_tot, list_marker_locations, jac_quality = get_jacobian(observations, theta, d, r, alpha, k_obs)
 
 
     # number of parameters to identify
@@ -166,10 +173,20 @@ def identify(observations, k_obs, expected_parameters, parameter_id_masks):
 
     # delete the columns where the mask is false - this is so that only the parameters marked with True are identified
     jacobian_tot_reduced = np.delete(jacobian_tot, np.where(np.logical_not(total_id_mask)), axis=1)
+    ##########
+    mat_q, mat_r = np.linalg.qr(jacobian_tot_reduced)
+    diag_r = np.diagonal(mat_r)
+    rank = np.linalg.matrix_rank(jacobian_tot_reduced)
+    ##########
     expected_parameters_reduced = np.delete(array_expected_params, np.where(np.logical_not(total_id_mask)))
     positions_reduced = np.delete(positions, np.where(np.logical_not(total_id_mask)))
-    res = least_squares(fun=residuals, x0=expected_parameters_reduced, method='lm', args=(errors_tot, jacobian_tot_reduced))
-    errors_reduced = res.x
+
+    if method == 'lsq':
+        errors_reduced, _, _, _ = np.linalg.lstsq(jacobian_tot_reduced, errors_tot)
+    else:
+        res = least_squares(fun=residuals,
+                            x0=expected_parameters_reduced, method='lm', args=(errors_tot, jacobian_tot_reduced))
+        errors_reduced = res.x
 
     array_errors = np.zeros(num_params)  # initialize
     array_errors[positions_reduced] = errors_reduced  # insert the identified errors at their original positions
@@ -180,7 +197,7 @@ def identify(observations, k_obs, expected_parameters, parameter_id_masks):
     est_theta, est_d, est_r, est_alpha = np.split(array_estimated_params, 4)
     estimated_params = {'theta': est_theta, 'd': est_d, 'r': est_r, 'alpha': est_alpha}
 
-    return estimated_errors, estimated_params, list_marker_locations
+    return estimated_errors, estimated_params, list_marker_locations, jac_quality
 
 
 def acin_color_palette():
@@ -208,10 +225,46 @@ def diff_dictionaries(dict1, dict2):
 
 def result_to_df(dict_error, dict_result):
     df = pd.DataFrame()
-    for key in dict_error:
-        df[key + ' error'] = dict_error[key]
-        df[key + ' result'] = dict_result[key]
+    errors, errors_mm_deg, results, results_mm_deg, tex_names = [], [], [], [], []
+    num_params = len(dict_error['theta'])
+    for i in range(num_params):
+        errors.append(dict_error['theta'][i])
+        errors.append(dict_error['d'][i])
+        errors.append(dict_error['r'][i])
+        errors.append(dict_error['alpha'][i])
+
+        errors_mm_deg.append(dict_error['theta'][i] / np.pi * 180)
+        errors_mm_deg.append(dict_error['d'][i] * 1000)
+        errors_mm_deg.append(dict_error['r'][i] * 1000)
+        errors_mm_deg.append(dict_error['alpha'][i] / np.pi * 180)
+
+        results.append(dict_result['theta'][i])
+        results.append(dict_result['d'][i])
+        results.append(dict_result['r'][i])
+        results.append(dict_result['alpha'][i])
+
+        results_mm_deg.append(dict_result['theta'][i] / np.pi * 180)
+        results_mm_deg.append(dict_result['d'][i] * 1000)
+        results_mm_deg.append(dict_result['r'][i] * 1000)
+        results_mm_deg.append(dict_result['alpha'][i] / np.pi * 180)
+
+        tex_names.append('$\\theta_{' + str(i) + '}$ [$\\degree$]')
+        tex_names.append('$d_{' + str(i) + '}$ [mm]')
+        tex_names.append('$r_{' + str(i) + '}$ [mm]')
+        tex_names.append('$\\alpha_{' + str(i) + '}$ [$\\degree$]')
+
+    errors = np.array(errors)
+    results = np.array(results)
+    errors_mm_deg = np.array(errors_mm_deg)
+    results_mm_deg = np.array(results_mm_deg)
+    df['tex_names'] = tex_names
+    df['errors'] = errors
+    df['results'] = results
+    df['results_mm_deg'] = results_mm_deg
+    df['errors_mm_deg'] = errors_mm_deg
+    df['identification_accuracy'] = df['results_mm_deg'] - df['errors_mm_deg']
     return df
+
 
 def plot_evolution(titles, evolution_list):
 
@@ -261,6 +314,8 @@ def plot_evolution(titles, evolution_list):
     axis[1, 1].set_title(titles['alpha'])
     axis[1, 1].legend()
 
+    return fig
+
 
 def _draw_as_table(df, pagesize):
     alternating_colors = [['white'] * len(df.columns), ['lightgray'] * len(df.columns)] * len(df)
@@ -277,6 +332,14 @@ def _draw_as_table(df, pagesize):
                          loc='center')
     return fig
 
+def latex_to_pdf(filepath, filename, content):
+    default_filepath = Path(filepath).joinpath(filename)
+    doc = Document(default_filepath=default_filepath,
+                   documentclass='standalone')
+    doc.packages.append(Package('booktabs'))
+    doc.packages.append(Package('gensymb'))
+    doc.append(NoEscape(content))
+    doc.generate_pdf(clean_tex=False)
 
 def dataframe_to_pdf(df, filename, numpages=(1, 1), pagesize=(11, 8.5)):
     with PdfPages(filename) as pdf:
