@@ -49,8 +49,6 @@ def get_jacobian(observations, theta, d, r, alpha, k_obs):
     Additionally, the marker locations are returned to check if marker localization works correctly
     """
     pe = ParameterEstimator()
-    print("Starting loop over observations")
-    start_time = time.time()
 
     num_params = len(theta) + len(d) + len(r) + len(alpha)
     jacobian_tot = np.zeros((0, num_params))
@@ -197,7 +195,11 @@ def identify(observations, k_obs, expected_parameters, parameter_id_masks, metho
     est_theta, est_d, est_r, est_alpha = np.split(array_estimated_params, 4)
     estimated_params = {'theta': est_theta, 'd': est_d, 'r': est_r, 'alpha': est_alpha}
 
-    return estimated_errors, estimated_params, list_marker_locations, jac_quality
+    additional_info = {'marker_locations': list_marker_locations,
+                       'jac_quality': jac_quality,
+                       'residuals': residuals(errors_reduced, errors_tot, jacobian_tot_reduced),
+                       'method_used': method}
+    return estimated_errors, estimated_params, additional_info
 
 
 def acin_color_palette():
