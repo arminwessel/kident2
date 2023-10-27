@@ -48,7 +48,7 @@ class ExperimentDataHandler:
         for name in self.dataframes:
             # for latex
             cols = ['tex_names', 'errors_mm_deg', 'results_mm_deg', 'identification_accuracy']
-            headers = ['parameter', 'simuated', 'identified', 'difference']
+            headers = ['parameter', 'simulated', 'identified', 'difference']
             texstr = self.dataframes[name].to_latex(escape=False, columns=cols, header=headers)
             latex_to_pdf(savepath, 'data', texstr)
 
