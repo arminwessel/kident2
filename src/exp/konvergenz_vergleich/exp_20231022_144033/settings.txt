@@ -1,0 +1,26 @@
+nominal params: 
+{'theta_nom': array([0.        , 0.        , 0.        , 0.        , 0.        ,
+       0.        , 0.        , 1.57079633]), 'd_nom': array([0., 0., 0., 0., 0., 0., 0., 0.]), 'r_nom': array([0.   , 0.   , 0.42 , 0.   , 0.4  , 0.   , 0.281, 0.   ]), 'alpha_nom': array([-1.57079633,  1.57079633, -1.57079633, -1.57079633,  1.57079633,
+        1.57079633, -1.57079633,  1.57079633])}
+
+parameter identification masks
+{'theta': [False, True, True, True, True, True, True, True], 'd': [False, True, True, True, True, True, True, True], 'r': [False, True, True, True, True, True, True, True], 'alpha': [False, True, True, True, True, True, True, True]}
+
+error factor
+40
+
+parameters with errors: 
+{'theta': [0.0, 0.6163989023299014, 0.47278399613735755, -0.6614106225982529, -0.3178024307330073, -0.26966176795748453, 0.5940331781720268, 1.2275069646960883], 'd': [0.0, 0.0353170556, 0.0270885276, -0.0378960372, -0.018208738000000002, -0.0154504812, 0.034035593999999995, -0.0196690316], 'r': [0.0, 0.0353170556, 0.4470885276, -0.0378960372, 0.381791262, -0.0154504812, 0.31503559400000003, -0.0196690316], 'alpha': [-1.5707963267948966, 2.187195229124798, -1.098012330657539, -2.2322069493931496, 1.2529938960618892, 1.3011345588374121, -0.9767631486228697, 1.2275069646960883]}
+
+observations file: 
+ observation_files/observations_simulated_w_error_0.5mm_0.5deg_num24020231020_164948.p
+
+number of iterations: 
+ 12 
+
+ residual_norm_tolerance: 
+ 0.001
+
+method used 
+ lm
+

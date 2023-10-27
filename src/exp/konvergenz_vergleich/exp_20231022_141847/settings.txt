@@ -1,0 +1,26 @@
+nominal params: 
+{'theta_nom': array([0.        , 0.        , 0.        , 0.        , 0.        ,
+       0.        , 0.        , 1.57079633]), 'd_nom': array([0., 0., 0., 0., 0., 0., 0., 0.]), 'r_nom': array([0.   , 0.   , 0.42 , 0.   , 0.4  , 0.   , 0.281, 0.   ]), 'alpha_nom': array([-1.57079633,  1.57079633, -1.57079633, -1.57079633,  1.57079633,
+        1.57079633, -1.57079633,  1.57079633])}
+
+parameter identification masks
+{'theta': [False, True, True, True, True, True, True, True], 'd': [False, True, True, True, True, True, True, True], 'r': [False, True, True, True, True, True, True, True], 'alpha': [False, True, True, True, True, True, True, True]}
+
+error factor
+70
+
+parameters with errors: 
+{'theta': [0.0, 1.0786980790773273, 0.8273719932403757, -1.1574685895469425, -0.5561542537827627, -0.4719080939255979, 1.039558061801047, 0.9700399431219819], 'd': [0.0, 0.0618048473, 0.0474049233, -0.0663180651, -0.031865291500000004, -0.0270383421, 0.0595622895, -0.0344208053], 'r': [0.0, 0.0618048473, 0.4674049233, -0.0663180651, 0.3681347085, -0.0270383421, 0.3405622895, -0.0344208053], 'alpha': [-1.5707963267948966, 2.6494944058722236, -0.7434243335545209, -2.728264916341839, 1.014642073012134, 1.0988882328692986, -0.5312382649938496, 0.9700399431219819]}
+
+observations file: 
+ observation_files/obs_2007_gazebo_.p
+
+number of iterations: 
+ 12 
+
+ residual_norm_tolerance: 
+ 0.001
+
+method used 
+ lm
+
