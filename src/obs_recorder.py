@@ -7,16 +7,7 @@ import pickle
 import os
 import time
 
-#############################################
-# input_bag_file = '/media/armin/Armin/2007_gazebo_iiwa_stopping.bag'
-input_bag_file = 'single.bag'
-sample_rate = 5  # in Hz
-image_topic = '/r1/camera_image_static'
-q_topic = '/r1/joint_states_static'
-disable_oversampling = True
 
-#############################################
-print('begin')
 def observe(image, q, aruco_param_dict):
     list_obs = []
     # get marker corners and ids
@@ -46,6 +37,15 @@ def observe(image, q, aruco_param_dict):
     return list_obs
 
 
+###############  SETUP  #####################
+# input_bag_file = '/media/armin/Armin/2007_gazebo_iiwa_stopping.bag'
+input_bag_file = '/media/armin/789ECB199ECACF36/Documents and Settings/Armin Wessel/Desktop/rosbags/bag_with_lockstep_281023_2023-10-28-14-01-49.bag'
+image_topic = 'r1/camera/image'
+q_topic = 'r1/joint_states'
+#############################################
+
+print('begin')
+
 input_bag = rosbag.Bag(input_bag_file, 'r')  # input file
 
 camera_matrix = np.array([1386.4138492513919, 0.0, 960.5, 0.0, 1386.4138492513919, 540.5, 0.0, 0.0, 1.0]).reshape(3, 3)
@@ -67,7 +67,7 @@ for idx, (topic, msg, t) in enumerate(input_bag.read_messages(topics=q_topic)):
     for i in range(7):
         q_values['q{}'.format(i)].append(msg.position[i])
 
-# for each image in the under-sampled series interpolate the joint coordinates and perform obs
+# for each image in the series interpolate the joint coordinates and perform obs
 for idx, (topic, msg, t) in enumerate(input_bag.read_messages(topics=image_topic)):
     print('processing frame {}'.format(idx))
     cv_image_timestamp = msg.header.stamp.to_sec()

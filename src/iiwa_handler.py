@@ -256,10 +256,6 @@ class IiwaHandler:
             trans_stamp = TransformStamped(header, names[i+1], trans)
             self.brs[i].sendTransformMessage(trans_stamp)
 
-        # T_corr = np.array([[0, 0, 1, 0],
-        #                    [-1, 0, 0, 0],
-        #                    [0, -1, 0, 0],
-        #                    [0, 0, 0, 1]])  # euler [ x: -np.pi/2, y: np.pi/2, z: 0 ]
 
         T_W0 = np.array([[-1, 0, 0, 0],
                          [0, -1, 0, 0],
@@ -277,7 +273,8 @@ class IiwaHandler:
 # Node
 if __name__ == "__main__":
     rospy.init_node('iiwa_handler')
-    handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/traj.csv")
+    #handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/traj.csv")
+    handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/single_marker.csv")
     rospy.on_shutdown(handler.release_udp_socket)
 
     rate = rospy.Rate(10)
