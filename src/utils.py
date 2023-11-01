@@ -61,3 +61,13 @@ def Trans(x,y,z):
                         [ 0, 1, 0, y],
                         [ 0, 0, 1, z],
                         [ 0, 0, 0, 1]])
+
+def toHomogeneous(rotmat, trans):
+    lower = np.reshape(np.array([0, 0, 0, 1]), (1, 4))
+    upper = np.concatenate(
+        (rotmat, np.reshape(np.array(trans), (3, 1))),
+        axis=1)
+    H = np.concatenate(
+        (upper, lower),
+        axis=0)
+    return H

@@ -10,6 +10,8 @@ rostopic pub /goto_q_desired kident2/Array_f64 "{data:[0,1.57,0,0,0,0,0]}"
 
 rosbag record -b 1024 --duration=30m -o /media/armin/Armin/rosbags/bag_with_lockstep_281023.bag r1/camera/camera_info r1/camera/image iiwa_q gazebo/performance_metrics clock r1/joint_states tf
 
-rosbag record -b 1024 --duration=30m -o "/media/armin/789ECB199ECACF36/Documents and Settings/Armin Wessel/Desktop/rosbags/bag_with_lockstep_281023.bag" r1/camera/camera_info r1/camera/image iiwa_q gazebo/performance_metrics clock r1/joint_states tf
+rosbag record -b 1024 --duration=30m -o "/media/armin/789ECB199ECACF36/Documents and Settings/Armin Wessel/Desktop/rosbags/single_marker.bag" r1/camera/camera_info r1/camera/image iiwa_q gazebo/performance_metrics clock r1/joint_states tf
+
+rosbag record compress -b 1024 --duration=5m -o "/home/armin/single_marker.bag" r1/camera/camera_info r1/camera/image iiwa_q gazebo/performance_metrics clock r1/joint_states tf
 
 

@@ -39,7 +39,7 @@ def observe(image, q, aruco_param_dict):
 
 ###############  SETUP  #####################
 # input_bag_file = '/media/armin/Armin/2007_gazebo_iiwa_stopping.bag'
-input_bag_file = '/media/armin/789ECB199ECACF36/Documents and Settings/Armin Wessel/Desktop/rosbags/bag_with_lockstep_281023_2023-10-28-14-01-49.bag'
+input_bag_file = '/home/armin/single_marker_2023-11-01-11-12-21.bag'
 image_topic = 'r1/camera/image'
 q_topic = 'r1/joint_states'
 #############################################

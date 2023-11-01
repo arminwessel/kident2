@@ -123,9 +123,8 @@ factor = 30
 # select observations file
 observations_file_select = 1
 observations_file_str_dict = {1: r'observation_files/obs_2007_gazebo_iiwa_stopping.bag_20230720-135812.p',
-                              2: r'observation_files/obs_2007_gazebo_iiwa_stopping.bag_20230720-135812_filtered.p',
                               5: r'observation_files/obs_bag_with_lockstep_281023_2023-10-28-14-01-49_20231028-142947.p',
-                              6: r'observation_files/obs_bag_with_lockstep_281023_2023-10-28-14-01-49_20231028-142947_filtered.p',
+                              6: r'observation_files/obs_single_marker_2023-11-01-11-12-21_20231101-112227.p',
                               10: r'observation_files/observations_simulated_w_error_T0_R0_num240_time20231027_113914.p',
                               11: r'observation_files/observations_simulated_w_error_T0.1_R0.1_num240_time20231027_113914.p',
                               12: r'observation_files/observations_simulated_w_error_T1_R1_num240_time20231027_113914.p',
