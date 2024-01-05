@@ -17,6 +17,9 @@ from sensor_msgs.msg import JointState
 from std_srvs.srv import Trigger, TriggerResponse, Empty, EmptyResponse
 import pandas as pd
 import sys, select, termios, tty
+import cv2
+from cv_bridge import CvBridge  # Package to convert between ROS and OpenCV Images
+from sensor_msgs.msg import Image  # Image is the message type
 
 
 class IiwaHandler:
@@ -43,6 +46,7 @@ class IiwaHandler:
         self.serv_print_state = rospy.Service('print_robot_state', Empty, self.print_robot_state)
         self.pub_status = rospy.Publisher("robot_status", String, queue_size=20)
         self.sub_q_desired = rospy.Subscriber('goto_q_desired', Array_f64, self.move_specific_point)
+        self.sub_img = rospy.Subscriber('r1/camera/image', Image, self.publish_markers)
         self.k = 0
         self.forward = True
         try:
@@ -53,10 +57,19 @@ class IiwaHandler:
         self.traj = self.traj[:, 1:]  # delete header
 
         self.qs = deque(maxlen=10000)
-        self.brs = [tf.TransformBroadcaster() for i in range(8)]
+        self.brs = [tf.TransformBroadcaster() for i in range(9)]
         self.q_desired = np.zeros(7)
         self.state = 'init'
         self.in_motion = False
+        self.bridge = CvBridge()
+        self.aruco_params = {'arucoDict': cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_1000),
+                        'aruco_length': 0.4,
+                        'camera_matrix': np.array([1386.4138492513919, 0.0, 960.5,
+                                                   0.0, 1386.4138492513919, 540.5,
+                                                   0.0, 0.0, 1.0]).reshape(3, 3),
+                        'camera_distortion': np.zeros(5),
+                        'params': cv2.aruco.DetectorParameters_create()}
+        self.tfbroadcaster = tf.TransformBroadcaster()
 
     def readout_q(self) -> None:
         """
@@ -224,6 +237,7 @@ class IiwaHandler:
             rospy.logerr("could not close udp socket")
 
     def broadcast_tf(self):
+        # broadcast the frames for the robot joints
         names = [f'r1/dh_link_{i}' for i in range(15)]
         theta_nom = ParameterEstimator.dhparams["theta_nom"]
         d_nom = ParameterEstimator.dhparams["d_nom"]
@@ -256,12 +270,8 @@ class IiwaHandler:
             trans_stamp = TransformStamped(header, names[i+1], trans)
             self.brs[i].sendTransformMessage(trans_stamp)
 
-
-        T_W0 = np.array([[-1, 0, 0, 0],
-                         [0, -1, 0, 0],
-                         [0, 0, 1, 0.36],
-                         [0, 0, 0, 1]])
-        T_W0 = T_W0 @ ParameterEstimator.get_T_i_forward(0, 0, 0, 0, np.pi/2)
+        # broadcast the frame connecting the world with dh robot frame 0
+        T_W0 = ParameterEstimator.T_W0
         quat_W0 = tf.transformations.quaternion_from_matrix(T_W0)
         translation_W0 = T_W0[0:3, 3]
         self.brs[i].sendTransform(translation_W0,
@@ -269,6 +279,69 @@ class IiwaHandler:
                               rospy.Time.now(),
                               'r1/dh_link_0',
                               'r1/world')
+
+##################################################
+    ############################################
+    #########################################
+    ####   STOLEN from automaticaddison.com
+    ####################################
+
+    def publish_markers(self, data):
+        """
+        Callback function.
+        """
+        # Display the message on the console
+        # self.get_logger().info('Receiving video frame')
+
+        # Convert ROS Image message to OpenCV image
+        current_frame = self.bridge.imgmsg_to_cv2(data)
+
+        # Detect ArUco markers in the video frame
+        (corners, marker_ids, rejected) = cv2.aruco.detectMarkers(
+            current_frame, self.aruco_params['arucoDict'], parameters=self.aruco_params['params'],
+            cameraMatrix=self.aruco_params['camera_matrix'], distCoeff=self.aruco_params['camera_distortion'])
+
+        # Check that at least one ArUco marker was detected
+        if marker_ids is not None:
+
+            # Draw a square around detected markers in the video frame
+            cv2.aruco.drawDetectedMarkers(current_frame, corners, marker_ids)
+
+            # Get the rotation and translation vectors
+            rvecs, tvecs, obj_points = cv2.aruco.estimatePoseSingleMarkers(
+                corners,
+                self.aruco_params['aruco_length'],
+                self.aruco_params['camera_matrix'],
+                self.aruco_params['camera_distortion'])
+              
+            # The pose of the marker is with respect to the camera lens frame.
+            # Imagine you are looking through the camera viewfinder,
+            # the camera lens frame's:
+            # x-axis points to the right
+            # y-axis points straight down towards your toes
+            # z-axis points straight ahead away from your eye, out of the camera
+            
+            
+            for i, marker_id in enumerate(marker_ids):
+                # change the base
+                T_ = utils.H_rvec_tvec(rvecs[i][0], tvecs[i][0]) 
+                T_corr = np.array([[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]]) 
+                T_CM = T_corr @ T_ @ np.linalg.inv(T_corr)
+		
+                # Store the translation (i.e. position) information
+                rotation_matrix, translation = utils.split_H_transform(T_CM)
+
+                r = R.from_matrix(rotation_matrix[0:3, 0:3])
+                quat = r.as_quat()
+
+
+                # Send the transform
+                self.tfbroadcaster.sendTransform(translation,
+                              quat,
+                              rospy.Time.now(),
+                              'r1/marker_'+str(marker_id),
+                              'r1/dh_link_8')
+
 
 # Node
 if __name__ == "__main__":

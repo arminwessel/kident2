@@ -16,7 +16,7 @@ from pathlib import Path
 
 def apply_error_to_params(nominal_values, mask, factor, convert):
     """
-    Adds scaled errors to niminal parameters, so that robot configurations can be simulated with defined errors.
+    Adds scaled errors to nominal parameters, so that robot configurations can be simulated with defined errors.
     The mask allows to enable/disable the identification of each parameter
     """
     # normal distribution around 0 with sigma=1
@@ -40,6 +40,9 @@ def residuals(params, errors_tot, jacobian_tot):
     ret = errors_tot - jacobian_tot @ params
     return ret
 
+
+# def get_obs_distance(obs1, obs2):
+    
 
 def get_jacobian(observations, theta, d, r, alpha, k_obs):
     """
@@ -67,6 +70,8 @@ def get_jacobian(observations, theta, d, r, alpha, k_obs):
         for obs1, obs2 in combinations(observations[markerid], 2):
             count = count+1
             comparisons.append((obs1, obs2))
+
+
         # randomly choose a limited number of these comparisons except if k_obs == 'all'
         if k_obs == 'all':
             comparisons_reduced = comparisons
@@ -80,8 +85,8 @@ def get_jacobian(observations, theta, d, r, alpha, k_obs):
             q1 = np.hstack((np.array(obs1["q"]), np.zeros(1)))
             q2 = np.hstack((np.array(obs2["q"]), np.zeros(1)))
             # transform the coordinate systems from ROS converntion to OpenCV convention
-            T_CM_1 = pe.T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"]) @ np.linalg.inv(pe.T_corr)
-            T_CM_2 = pe.T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"]) @ np.linalg.inv(pe.T_corr)
+            T_CM_1 = pe.T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"]) @ np.linalg.inv(pe.T_corr) #@ pe.T_correct_cam_mdh
+            T_CM_2 = pe.T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"]) @ np.linalg.inv(pe.T_corr) #@ pe.T_correct_cam_mdh
 
             # calculate nominal transforms
             T_08_1 = pe.get_T_jk(0, 8, q1, theta, d, r, alpha)

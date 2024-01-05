@@ -44,8 +44,8 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     estimated_errors_evolution = []
     norm_residuals_evolution = []
     print('begin iterative solving process')
-    for iterator in range(num_iterations):
-        print(f'   pass {iterator}')
+    for itervar in range(num_iterations):
+        print(f'   pass {itervar}')
         # below the observation are describing a robot with nominal parameters, and the identification is given
         # the error parameters - this is to be able to vary the error easily
         current_errors, current_estimate, additional_info = identify(observations,
@@ -149,8 +149,8 @@ residual_norm_tolerance = 1e-3
 #         do_experiment(parameter_id_masks, factor, observations_file_select,
 #                       observations_file_str_dict, num_iterations, residual_norm_tolerance)
 
-for observations_file_select in [5]:
-    for factor in [0, 0.5, 5, 10]:
-        for k_obs in [10, 20, 50, 100, 200, 300]:
+for observations_file_select in [6]:
+    for factor in [0]:
+        for k_obs in [50]:
             do_experiment(parameter_id_masks, factor, observations_file_select,
                           observations_file_str_dict, num_iterations, residual_norm_tolerance, k_obs)

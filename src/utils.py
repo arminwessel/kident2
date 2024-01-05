@@ -19,6 +19,7 @@ def H_rvec_tvec(rvec,tvec):
     )
     return np.asarray(H)
 
+
 def mat2rvectvec(transformation_matrix):
     assert (4, 4) == np.shape(transformation_matrix)
     R = transformation_matrix[0:3, 0:3]
@@ -26,7 +27,29 @@ def mat2rvectvec(transformation_matrix):
     tvec = transformation_matrix[0:3, 3]
     return rvec, tvec
 
-def roundprint(H):
+def split_H_transform(H):
+    assert (4, 4) == np.shape(H)
+    R = H[0:3, 0:3]
+    tvec = H[0:3, 3]
+    return R, tvec
+
+def merge_H_transform(R, tvec):
+    assert (3, 3) == np.shape(R)
+    tvec = np.array(tvec).flatten()
+    lower = np.reshape(np.array([0, 0, 0, 1]), (1, 4))
+    upper = np.concatenate(
+        (R, np.reshape(np.array(tvec), (3, 1))),
+        axis=1
+    )
+    H = np.concatenate(
+        (upper, lower),
+        axis=0
+    )
+    return H
+
+
+def roundprint(H, mode='print'):
+    string = ''
     for line in H:
         linestr=''
         for elem in line:
@@ -35,8 +58,12 @@ def roundprint(H):
                 linestr += " {:.3f} ".format(elem)
             else:
                 linestr += "{:.3f} ".format(elem)
-        print(linestr+'\n')
-    print('\n')
+        string = string+ linestr + '\n'
+    string = string + '\n'
+    if mode=='string':
+        return string
+    else:
+        print(string)
     
 def Rx(x):
     return np.array([   [ 1, 0       , 0       , 0],

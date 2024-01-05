@@ -6,35 +6,8 @@ import rosbag
 import pickle
 import os
 import time
+from parameter_estimator import ParameterEstimator
 
-
-def observe(image, q, aruco_param_dict):
-    list_obs = []
-    # get marker corners and ids
-    (corners, ids, rejected) = cv2.aruco.detectMarkers(image, aruco_param_dict['arucoDict'])
-    try:
-        # pose estimation to return the pose of each marker in the camera frame of reference
-        rvecs, tvecs, _objPoints = cv2.aruco.estimatePoseSingleMarkers(corners,
-                                                                       aruco_param_dict['aruco_length'],
-                                                                       aruco_param_dict['camera_matrix'],
-                                                                       aruco_param_dict['camera_distortion'])
-    except Exception as e:
-        print("Pose estimation failed: {}".format(e))
-        return
-
-    if isinstance(ids, type(None)):  # if no markers were found, return
-        return {}
-
-    for o in zip(ids, rvecs, tvecs):  # create a dict for each observation
-        o_id = o[0][0]
-        obs = {"id": o_id,
-               "rvec": o[1].flatten().tolist(),
-               "tvec": o[2].flatten().tolist(),
-               "t": t,
-               "q": q}
-        list_obs.append(obs)  # append observation to queue corresponding to id (deque from right)
-
-    return list_obs
 
 
 ###############  SETUP  #####################
@@ -78,7 +51,7 @@ for idx, (topic, msg, t) in enumerate(input_bag.read_messages(topics=image_topic
         qi = np.interp(cv_image_timestamp, q_values['timestamp'], q_values['q{}'.format(i)])
         q_image.append(qi)
     q_image = np.array(q_image)
-    list_obs_img = observe(cv2_img, q_image, aruco_params)  # observations made on that frame
+    list_obs_img = ParameterEstimator.observe(cv2_img, q_image, aruco_params, time)  # observations made on that frame
     for obs in list_obs_img:  # sort all observations into a dictionary based on tag id
         marker_id = obs['id']
         if not marker_id in observations:  # if this id was not yet used initialize list for it
