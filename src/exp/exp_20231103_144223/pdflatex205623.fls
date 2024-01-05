@@ -1,0 +1,4 @@
+PWD /home/armin/catkin_ws/src/kident2/src/exp/exp_20231103_144223
+INPUT /etc/texmf/web2c/texmf.cnf
+INPUT /usr/share/texmf/web2c/texmf.cnf
+INPUT /usr/share/texlive/texmf-dist/web2c/texmf.cnf
