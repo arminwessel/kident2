@@ -15,25 +15,7 @@ class ParameterEstimator:
     Estimate the kinematic model error of a robot manipulator
     The model is based on the DH convention
     """
-    pip2 = np.pi / 2
-    pi = np.pi
-                
-    dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, pi]),
-                "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0]),
-                "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0, 0.281]),
-                "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, 0])}
 
-    # Correction matrix for camera between ros and opencv
-    T_corr = np.array([[0, -1, 0, 0],
-                       [0, 0, 1, 0],
-                       [-1, 0, 0, 0],
-                       [0, 0, 0, 1]])
-
-    # Transform from world frame to frame 0
-    T_W0 = np.array([[-1, 0, 0, 0],
-                     [0, 0, 1, 0],
-                     [0, 1, 0, 0.36],
-                     [0, 0, 0, 1]])
 
     # dhparams = {"theta_nom": np.array([0, pi, pi, 0, pi, 0, pi]),
     #             "d_nom" : np.array([0.1525, 0.2075, 0.2325, 0.1825, 0.2125, 0.1875, 0.081]),
@@ -104,34 +86,34 @@ class ParameterEstimator:
             return T
 
 
-    @staticmethod
-    def observe(image, q, aruco_param_dict, time=0):
-        list_obs = []
-        # get marker corners and ids
-        (corners, ids, rejected) = cv2.aruco.detectMarkers(image, aruco_param_dict['arucoDict'])
-        try:
-            # pose estimation to return the pose of each marker in the camera frame of reference
-            rvecs, tvecs, _objPoints = cv2.aruco.estimatePoseSingleMarkers(corners,
-                                                                           aruco_param_dict['aruco_length'],
-                                                                           aruco_param_dict['camera_matrix'],
-                                                                           aruco_param_dict['camera_distortion'])
-        except Exception as e:
-            print("Pose estimation failed: {}".format(e))
-            return
-
-        if isinstance(ids, type(None)):  # if no markers were found, return
-            return {}
-
-        for o in zip(ids, rvecs, tvecs):  # create a dict for each observation
-            o_id = o[0][0]
-            obs = {"id": o_id,
-                   "rvec": o[1].flatten().tolist(),
-                   "tvec": o[2].flatten().tolist(),
-                   "t": time,
-                   "q": q}
-            list_obs.append(obs)  # append observation to queue corresponding to id (deque from right)
-
-        return list_obs
+    # @staticmethod
+    # def observe(image, q, aruco_param_dict, time=0):
+    #     list_obs = []
+    #     # get marker corners and ids
+    #     (corners, ids, rejected) = cv2.aruco.detectMarkers(image, aruco_param_dict['arucoDict'])
+    #     try:
+    #         # pose estimation to return the pose of each marker in the camera frame of reference
+    #         rvecs, tvecs, _objPoints = cv2.aruco.estimatePoseSingleMarkers(corners,
+    #                                                                        aruco_param_dict['aruco_length'],
+    #                                                                        aruco_param_dict['camera_matrix'],
+    #                                                                        aruco_param_dict['camera_distortion'])
+    #     except Exception as e:
+    #         print("Pose estimation failed: {}".format(e))
+    #         return
+    #
+    #     if isinstance(ids, type(None)):  # if no markers were found, return
+    #         return {}
+    #
+    #     for o in zip(ids, rvecs, tvecs):  # create a dict for each observation
+    #         o_id = o[0][0]
+    #         obs = {"id": o_id,
+    #                "rvec": o[1].flatten().tolist(),
+    #                "tvec": o[2].flatten().tolist(),
+    #                "t": time,
+    #                "q": q}
+    #         list_obs.append(obs)  # append observation to queue corresponding to id (deque from right)
+    #
+    #     return list_obs
 
     def get_parameter_jacobian_improved(self, q1, q2, theta_all, d_all, r_all, alpha_all) -> np.array:
         """

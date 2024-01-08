@@ -20,6 +20,7 @@ import sys, select, termios, tty
 import cv2
 from cv_bridge import CvBridge  # Package to convert between ROS and OpenCV Images
 from sensor_msgs.msg import Image  # Image is the message type
+from robot import RobotDescription
 
 
 class IiwaHandler:
@@ -27,7 +28,7 @@ class IiwaHandler:
     Handles an instance of the class "arcpy.Robots.Iiwa"
     Subscribes to the topic "q_desired" and executes the requested trajectories
     Stores past values of q together with time and provides a service that 
-    upon request returns the interpolated value of the joints for a given time
+    Broadcasts transforms for joints and found markers on ROS tf
     """
 
     def __init__(self, traj_file) -> None:
@@ -40,13 +41,13 @@ class IiwaHandler:
             pass
         time.sleep(0.1)
 
-        self.pub_q = rospy.Publisher("iiwa_q", Array_f64, queue_size=20)
-        self.serv_q = rospy.Service('get_q_interp', Get_q, self.get_q_interpolated)
+        # self.pub_q = rospy.Publisher("iiwa_q", Array_f64, queue_size=20)
+        # self.serv_q = rospy.Service('get_q_interp', Get_q, self.get_q_interpolated)
         self.serv_next = rospy.Service('next_move', Trigger, self.move_next_point)
         self.serv_print_state = rospy.Service('print_robot_state', Empty, self.print_robot_state)
         self.pub_status = rospy.Publisher("robot_status", String, queue_size=20)
         self.sub_q_desired = rospy.Subscriber('goto_q_desired', Array_f64, self.move_specific_point)
-        self.sub_img = rospy.Subscriber('r1/camera/image', Image, self.publish_markers)
+        self.sub_img = rospy.Subscriber('r1/camera/image', Image, self.broadcast_marker_tfs)
         self.k = 0
         self.forward = True
         try:
@@ -57,18 +58,11 @@ class IiwaHandler:
         self.traj = self.traj[:, 1:]  # delete header
 
         self.qs = deque(maxlen=10000)
-        self.brs = [tf.TransformBroadcaster() for i in range(9)]
+        # self.brs = [tf.TransformBroadcaster() for i in range(9)]
         self.q_desired = np.zeros(7)
         self.state = 'init'
         self.in_motion = False
         self.bridge = CvBridge()
-        self.aruco_params = {'arucoDict': cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_1000),
-                        'aruco_length': 0.4,
-                        'camera_matrix': np.array([1386.4138492513919, 0.0, 960.5,
-                                                   0.0, 1386.4138492513919, 540.5,
-                                                   0.0, 0.0, 1.0]).reshape(3, 3),
-                        'camera_distortion': np.zeros(5),
-                        'params': cv2.aruco.DetectorParameters_create()}
         self.tfbroadcaster = tf.TransformBroadcaster()
 
     def readout_q(self) -> None:
@@ -83,55 +77,56 @@ class IiwaHandler:
     def print_robot_state(self, arg):
         print(self.iiwa.state)
         return EmptyResponse()
+    #
+    # def get_q_interpolated(self, req) -> Get_qResponse:
+    #     """
+    #     Implementation of Service "Get_q":
+    #     Receives a float time. Find the readout values
+    #     before and after requested time. Interpolate for
+    #     each q and return interpolated values
+    #     """
+    #     # initialize response
+    #     resp = Get_qResponse()
+    #
+    #     qs = self.qs
+    #     t_interest = req.time
+    #
+    #     # if t_interest is too long ago return
+    #     if t_interest < qs[0][1]:
+    #         rospy.logwarn("Cannot provide q for time {}, out of saved area [past]".format(t_interest))
+    #         return resp
+    #
+    #     while t_interest > qs[-1][1]:
+    #         pass  # wait for new readout
+    #
+    #     rospy.sleep(0.01)
+    #     for (i, q_elem) in enumerate(qs):  # iterating from oldest entries towards newer ones
+    #         q, t = q_elem
+    #         if t > t_interest:  # first q_elem where t>t_interest, now t_interest is bw current and prev element
+    #             qs_interval = [qs[i - 1][0], qs[i][0]]  # extract q from current and previous element
+    #             t_interval = [qs[i - 1][1], qs[i][1]]  # extract t from current and previous element
+    #             break
+    #             # check if t_interest is newer than last entry
+    #
+    #     # interpolation
+    #     try:
+    #         qs_interval = np.transpose(np.array(qs_interval).squeeze())  # convert to array and transpose
+    #         q_interp = np.array([np.interp(t_interest, t_interval, qi_interval) for qi_interval in
+    #                              qs_interval])  # for each [qi-,qi+] interpolate
+    #     except:
+    #         rospy.logwarn("iiwa_handler: Could not interpolate")
+    #         return resp
+    #     resp.q = q_interp.tolist()
+    #     resp.time = t_interest
+    #     return resp
 
-    def get_q_interpolated(self, req) -> Get_qResponse:
-        """
-        Implementation of Service "Get_q":
-        Receives a float time. Find the readout values 
-        before and after requested time. Interpolate for 
-        each q and return interpolated values 
-        """
-        # initialize response
-        resp = Get_qResponse()
-
-        qs = self.qs
-        t_interest = req.time
-        
-        # if t_interest is too long ago return 
-        if t_interest < qs[0][1]:
-            rospy.logwarn("Cannot provide q for time {}, out of saved area [past]".format(t_interest))
-            return resp
-        
-        while t_interest > qs[-1][1]:
-            pass  # wait for new readout
-        
-        rospy.sleep(0.01)
-        for (i, q_elem) in enumerate(qs):  # iterating from oldest entries towards newer ones
-            q, t = q_elem
-            if t > t_interest:  # first q_elem where t>t_interest, now t_interest is bw current and prev element
-                qs_interval = [qs[i-1][0], qs[i][0]]  # extract q from current and previous element
-                t_interval = [qs[i-1][1], qs[i][1]]  # extract t from current and previous element
-                break 
-                # check if t_interest is newer than last entry
-
-        # interpolation
-        try:
-            qs_interval = np.transpose(np.array(qs_interval).squeeze())  # convert to array and transpose
-            q_interp = np.array([np.interp(t_interest, t_interval, qi_interval) for qi_interval in qs_interval])  # for each [qi-,qi+] interpolate
-        except:
-            rospy.logwarn("iiwa_handler: Could not interpolate")
-            return resp
-        resp.q = q_interp.tolist()
-        resp.time = t_interest
-        return resp
-
-    def publish_q(self) -> None:
-        """
-        Publish the newest value from stored q readouts
-        """
-        msg = Array_f64()
-        msg.data, msg.time = self.qs[-1]  # publish newest element
-        self.pub_q.publish(msg)
+    # def publish_q(self) -> None:
+    #     """
+    #     Publish the newest value from stored q readouts
+    #     """
+    #     msg = Array_f64()
+    #     msg.data, msg.time = self.qs[-1]  # publish newest element
+    #     self.pub_q.publish(msg)
 
     def move_next_point(self, arg):
         if not (self.state == 'ready'):
@@ -175,34 +170,7 @@ class IiwaHandler:
             self.iiwa.move_jointspace(self.q_desired, t0, 5, N_pts=10)  # 5 s trajectory
             # iterate forwards and backwards over the array
 
-
-
     def check_status(self):
-        q_dot_set = self.iiwa.state.get_q_dot_set()
-        speed = np.sum(np.abs(q_dot_set))
-
-        if speed > 0:
-            # was stopped but now moving
-            if not self.in_motion:
-                rospy.loginfo('READY - > BUSY')
-            self.state = 'busy'
-
-        if self.state == 'busy':
-            if self.in_motion and speed == 0:
-                # was moving but now stopped
-                self.state = 'ready'
-                rospy.loginfo('BUSY - > READY')
-
-        if self.state == 'init':
-            if speed == 0:
-                self.state = 'ready'
-                rospy.loginfo('INIT - > READY')
-        self.in_motion = np.sum(q_dot_set) != 0
-        msg = String()
-        msg.data = self.state
-        self.pub_status.publish(msg)
-
-    def check_status2(self):
         _msg = rospy.wait_for_message("r1/joint_states", JointState)
         speed = np.max(np.abs(np.array(_msg.velocity)))
         epsilon = 0.005
@@ -228,125 +196,58 @@ class IiwaHandler:
         msg.data = self.state
         self.pub_status.publish(msg)
 
-    
-
     def release_udp_socket(self):
         try:
             self.iiwa.udp_socket.close()
         except:
             rospy.logerr("could not close udp socket")
 
-    def broadcast_tf(self):
+    def broadcast_joint_tfs(self):
         # broadcast the frames for the robot joints
-        names = [f'r1/dh_link_{i}' for i in range(15)]
-        theta_nom = ParameterEstimator.dhparams["theta_nom"]
-        d_nom = ParameterEstimator.dhparams["d_nom"]
-        r_nom = ParameterEstimator.dhparams["r_nom"]
-        alpha_nom = ParameterEstimator.dhparams["alpha_nom"]
         qs, t = self.qs[-1]
         qs = qs.flatten()
-        qs = np.append(qs, np.zeros(1))
-        for (i, q) in enumerate(qs):  # iterate over latest set of joint values
-            theta = theta_nom[i]
-            d = d_nom[i]
-            r = r_nom[i]
-            alpha = alpha_nom[i]
-            T = ParameterEstimator.get_T_i_forward(q, theta, d, r, alpha)
-            quat = tf.transformations.quaternion_from_matrix(T)
-            translation = T[0:3, 3]
-            # ret = self.brs[i].sendTransform(trans,
-            #                       quat,
-            #                       rospy.Time.now(),
-            #                       names[i+1],
-            #                       names[i])
-            trans = Transform(translation=Vector3(*translation.tolist()),
-                              rotation=Quaternion(*quat.tolist())
-                              )
+        joint_tfs = RobotDescription.get_joint_tfs(qs)
 
-            header = Header()
-            header.stamp = rospy.Time.now()
-            header.frame_id = names[i]  # the parent link
-            # I use the stamped msg signature call to prevent the order confusion
-            trans_stamp = TransformStamped(header, names[i+1], trans)
-            self.brs[i].sendTransformMessage(trans_stamp)
+        for transform in joint_tfs:
+            rotmat, trans = utils.split_H_transform(transform['mat'])
+            r = R.from_matrix(rotmat)
+            quat = r.as_quat()
+            self.tfbroadcaster.sendTransform(trans,
+                                             quat,
+                                             rospy.Time.now(),
+                                             'r1/' + transform['from_frame'],
+                                             'r1/' + transform['to_frame'])
 
-        # broadcast the frame connecting the world with dh robot frame 0
-        T_W0 = ParameterEstimator.T_W0
-        quat_W0 = tf.transformations.quaternion_from_matrix(T_W0)
-        translation_W0 = T_W0[0:3, 3]
-        self.brs[i].sendTransform(translation_W0,
-                              quat_W0,
-                              rospy.Time.now(),
-                              'r1/dh_link_0',
-                              'r1/world')
-
-##################################################
-    ############################################
-    #########################################
-    ####   STOLEN from automaticaddison.com
-    ####################################
-
-    def publish_markers(self, data):
+    def broadcast_marker_tfs(self, data):
         """
-        Callback function.
+        Callback for the camera image subscriber
+        gets the estimated pose from camera to marker for each marker found in the image,
+        and publishes them on tf
         """
-        # Display the message on the console
-        # self.get_logger().info('Receiving video frame')
-
-        # Convert ROS Image message to OpenCV image
         current_frame = self.bridge.imgmsg_to_cv2(data)
+        camera_tfs = RobotDescription.get_camera_tfs(current_frame)
 
-        # Detect ArUco markers in the video frame
-        (corners, marker_ids, rejected) = cv2.aruco.detectMarkers(
-            current_frame, self.aruco_params['arucoDict'], parameters=self.aruco_params['params'],
-            cameraMatrix=self.aruco_params['camera_matrix'], distCoeff=self.aruco_params['camera_distortion'])
+        for transform in camera_tfs:
+            rotmat, trans = utils.split_H_transform(transform['mat'])
+            r = R.from_matrix(rotmat)
+            quat = r.as_quat()
+            self.tfbroadcaster.sendTransform(trans,
+                                             quat,
+                                             rospy.Time.now(),
+                                             'r1/' + transform['from_frame'],
+                                             'r1/' + transform['to_frame'])
 
-        # Check that at least one ArUco marker was detected
-        if marker_ids is not None:
-
-            # Draw a square around detected markers in the video frame
-            cv2.aruco.drawDetectedMarkers(current_frame, corners, marker_ids)
-
-            # Get the rotation and translation vectors
-            rvecs, tvecs, obj_points = cv2.aruco.estimatePoseSingleMarkers(
-                corners,
-                self.aruco_params['aruco_length'],
-                self.aruco_params['camera_matrix'],
-                self.aruco_params['camera_distortion'])
-              
-            # The pose of the marker is with respect to the camera lens frame.
-            # Imagine you are looking through the camera viewfinder,
-            # the camera lens frame's:
-            # x-axis points to the right
-            # y-axis points straight down towards your toes
-            # z-axis points straight ahead away from your eye, out of the camera
-            
-            
-            for i, marker_id in enumerate(marker_ids):
-                # change the base
-                T_ = utils.H_rvec_tvec(rvecs[i][0], tvecs[i][0]) 
-                T_corr = np.array([[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]]) 
-                T_CM = T_corr @ T_ @ np.linalg.inv(T_corr)
-		
-                # Store the translation (i.e. position) information
-                rotation_matrix, translation = utils.split_H_transform(T_CM)
-
-                r = R.from_matrix(rotation_matrix[0:3, 0:3])
-                quat = r.as_quat()
-
-
-                # Send the transform
-                self.tfbroadcaster.sendTransform(translation,
-                              quat,
-                              rospy.Time.now(),
-                              'r1/marker_'+str(marker_id),
-                              'r1/dh_link_8')
+        self.tfbroadcaster.sendTransform(np.array([0, 0, 0]),  # identity translation
+                                         np.array([0, 0, 0, 1]),  # identity rotation
+                                         rospy.Time.now(),
+                                         'r1/cam',
+                                         'r1/8')
 
 
 # Node
 if __name__ == "__main__":
     rospy.init_node('iiwa_handler')
-    #handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/traj.csv")
+    # handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/traj.csv")
     handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/single_marker.csv")
     rospy.on_shutdown(handler.release_udp_socket)
 
@@ -354,9 +255,7 @@ if __name__ == "__main__":
 
     while not rospy.is_shutdown():
         handler.readout_q()
-        handler.publish_q()  # publish q on every fourth passing
-        handler.broadcast_tf()
-        handler.check_status2()
+        handler.broadcast_joint_tfs()
+        # marker tfs are broadcast by subscribing to the image topic
+        handler.check_status()
         rate.sleep()
-
-

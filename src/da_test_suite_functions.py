@@ -13,6 +13,8 @@ from scipy.optimize import least_squares
 from matplotlib.backends.backend_pdf import PdfPages
 from pylatex import Document, NoEscape, Package
 from pathlib import Path
+from robot import RobotDescription
+
 
 def apply_error_to_params(nominal_values, mask, factor, convert):
     """
@@ -41,93 +43,6 @@ def residuals(params, errors_tot, jacobian_tot):
     return ret
 
 
-# def get_obs_distance(obs1, obs2):
-    
-
-def get_jacobian(observations, theta, d, r, alpha, k_obs):
-    """
-    Iterate over all observations. For each pair, compute the relative transform between them,
-    and from that calculate the error vector and the corresponding jacobian.
-    Collect all jacobians and error vectors to create the identification dataset
-    Additionally, the marker locations are returned to check if marker localization works correctly
-    """
-    pe = ParameterEstimator()
-
-    num_params = len(theta) + len(d) + len(r) + len(alpha)
-    jacobian_tot = np.zeros((0, num_params))
-    errors_tot = np.zeros(0)
-
-    # initilalize a list to contain the observed location of the markers in world coordinates
-    list_marker_locations = []
-
-    # loop over all markers in observations
-    for markerid in list(observations)[:]:
-        num_observed = 0
-        count = 0
-
-        # compute all possible pairs from observations of this marker
-        comparisons = []
-        for obs1, obs2 in combinations(observations[markerid], 2):
-            count = count+1
-            comparisons.append((obs1, obs2))
-
-
-        # randomly choose a limited number of these comparisons except if k_obs == 'all'
-        if k_obs == 'all':
-            comparisons_reduced = comparisons
-        else:
-            comparisons_reduced = random.choices(comparisons, k=k_obs)
-
-        # iterate over the observation pairs
-        for obs1, obs2 in comparisons_reduced:
-
-            # extract measurements
-            q1 = np.hstack((np.array(obs1["q"]), np.zeros(1)))
-            q2 = np.hstack((np.array(obs2["q"]), np.zeros(1)))
-            # transform the coordinate systems from ROS converntion to OpenCV convention
-            T_CM_1 = pe.T_corr @ utils.H_rvec_tvec(obs1["rvec"], obs1["tvec"]) @ np.linalg.inv(pe.T_corr) #@ pe.T_correct_cam_mdh
-            T_CM_2 = pe.T_corr @ utils.H_rvec_tvec(obs2["rvec"], obs2["tvec"]) @ np.linalg.inv(pe.T_corr) #@ pe.T_correct_cam_mdh
-
-            # calculate nominal transforms
-            T_08_1 = pe.get_T_jk(0, 8, q1, theta, d, r, alpha)
-            T_08_2 = pe.get_T_jk(0, 8, q2, theta, d, r, alpha)
-
-            # perform necessary inversions
-            T_MC_2 = np.linalg.inv(T_CM_2)
-            T_80_1 = np.linalg.inv(T_08_1)
-
-            T_WM_1 = pe.T_W0 @ T_08_1 @ T_CM_1
-            if markerid == 2 or True:
-                list_marker_locations.append([T_WM_1[0, 3], T_WM_1[1, 3], T_WM_1[2, 3]])
-
-            D_meas = T_CM_1 @ T_MC_2
-            D_nom = T_80_1 @ T_08_2
-            delta_D = D_meas @ np.linalg.inv(D_nom)
-            delta_D_skew = 0.5 * (delta_D - delta_D.T)
-
-            drvec = np.array([delta_D_skew[2, 1], delta_D_skew[0, 2], delta_D_skew[1, 0]])
-            dtvec = delta_D[0:3, 3]
-            pose_error = np.concatenate((dtvec, drvec))
-
-            # calculate the corresponding difference jacobian
-            jacobian = pe.get_parameter_jacobian_improved(q1=q1, q2=q2,
-                                                      theta_all=theta,
-                                                      d_all=d,
-                                                      r_all=r,
-                                                      alpha_all=alpha)
-
-            # collect the jacobian and error resulting from these two observations
-            jacobian_tot = np.concatenate((jacobian_tot, jacobian), axis=0)
-            errors_tot = np.concatenate((errors_tot, pose_error), axis=0)
-
-    mat_q, mat_r = np.linalg.qr(jacobian_tot)
-    diag_r = np.diagonal(mat_r)
-    rank = np.linalg.matrix_rank(jacobian_tot)
-    jacobian_quality = {'qr_criterion': diag_r, 'rank': rank}
-
-    return jacobian_tot, errors_tot, list_marker_locations, jacobian_quality
-
-
 def asSpherical(x, y, z):
     r = m.sqrt(x*x + y*y + z*z)
     theta = m.acos(z/r)*180 / m.pi  # to degrees
@@ -144,11 +59,17 @@ def asCartesian(r, theta, phi):
     return x, y, z
 
 
-def identify(observations, k_obs, expected_parameters, parameter_id_masks, method='lm'):
+def create_pairs_random(input_list):
+    # TODO write this from ipynb
+    return None
+
+
+
+def identify(obs_pairs, expected_parameters, parameter_id_masks, method='lm'):
     """
     Function estimating the parameter error based on a linear model
 
-    observations: a dictionary of observations of the real robot to use in estimating the real parameters
+    obs_pairs: a list of observation pairs
     k_obs: number of observations to be used, passed to get_jacobian
     expected_parameters: these parameters will be used to generate the jacobian, the error calculated in each iteration
     of identify is expressed with respect to these parameters
@@ -166,8 +87,7 @@ def identify(observations, k_obs, expected_parameters, parameter_id_masks, metho
     positions = np.arange(num_params)
 
     # calculate jacobian
-    jacobian_tot, errors_tot, list_marker_locations, jac_quality = get_jacobian(observations, theta, d, r, alpha, k_obs)
-
+    jacobian_tot, errors_tot, jac_quality = RobotDescription.get_jacobian(obs_pairs, theta, d, r, alpha)
 
     # number of parameters to identify
     total_id_mask = (parameter_id_masks['theta'] + parameter_id_masks['d']
@@ -200,8 +120,7 @@ def identify(observations, k_obs, expected_parameters, parameter_id_masks, metho
     est_theta, est_d, est_r, est_alpha = np.split(array_estimated_params, 4)
     estimated_params = {'theta': est_theta, 'd': est_d, 'r': est_r, 'alpha': est_alpha}
 
-    additional_info = {'marker_locations': list_marker_locations,
-                       'jac_quality': jac_quality,
+    additional_info = {'jac_quality': jac_quality,
                        'residuals': residuals(errors_reduced, errors_tot, jacobian_tot_reduced),
                        'method_used': method}
     return estimated_errors, estimated_params, additional_info

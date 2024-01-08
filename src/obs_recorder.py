@@ -6,7 +6,10 @@ import rosbag
 import pickle
 import os
 import time
+import utils
 from parameter_estimator import ParameterEstimator
+from robot import RobotDescription
+import pandas as pd
 
 
 
@@ -17,53 +20,44 @@ image_topic = 'r1/camera/image'
 q_topic = 'r1/joint_states'
 #############################################
 
-print('begin')
 
-input_bag = rosbag.Bag(input_bag_file, 'r')  # input file
+def process_bag_file(input_bag_file, image_topic, q_topic):
+    print('Beginning Processing')
+    input_bag = rosbag.Bag(input_bag_file, 'r')  # input file
 
-camera_matrix = np.array([1386.4138492513919, 0.0, 960.5, 0.0, 1386.4138492513919, 540.5, 0.0, 0.0, 1.0]).reshape(3, 3)
-aruco_params = {'arucoDict': cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_1000),
-                'aruco_length': 0.4,
-                'camera_matrix': camera_matrix,
-                'camera_distortion': np.zeros(5)}
+    bridge = CvBridge()
+    observations = []
 
-bridge = CvBridge()
-observations = {}
-num_obs = 0
+    # extract q measurements together with timestamps, and store them
+    q_timestamps = []
+    q_values = []
+    for idx, (topic, msg, t) in enumerate(input_bag.read_messages(topics=q_topic)):
+        if idx % 100 == 0:
+            print(f'finished processing joint values up to {idx}')
+        q_timestamps.append(msg.header.stamp.to_sec())
+        q_values.append(np.array(msg.position))
 
+    # extract each image together with its timestamp
+    for idx, (topic, msg, t) in enumerate(input_bag.read_messages(topics=image_topic)):
+        if idx % 100 == 0:
+            print(f'finished processing image frames up to {idx}')
+        cv_img_timestamp = msg.header.stamp.to_sec()
+        cv_img = bridge.imgmsg_to_cv2(msg, "bgr8")
+        interp_distance = utils.get_interp_distance(q_timestamps, cv_img_timestamp)  # check how far this timestamp is from the closest timestamp for q
+        q_interp = utils.interpolate_vector(cv_img_timestamp, q_timestamps, np.array(q_values).T)  # get the interpolated value
+        list_obs_frame = RobotDescription.observe(cv_img, q_interp, cv_img_timestamp)  # returns list of obs dictionaries
+        _ = [obs.update(interp_dist=interp_distance) for obs in list_obs_frame]  # add interp distance to each dict
+        observations.extend(list_obs_frame)  # add all entries of small list to big list
 
-# sort q values from rosbag into dictionary
-q_values = {'timestamp': [], 'q0': [], 'q1': [], 'q2': [], 'q3': [], 'q4': [], 'q5': [], 'q6': []}
-for idx, (topic, msg, t) in enumerate(input_bag.read_messages(topics=q_topic)):
-    q_values['timestamp'].append(t.to_sec())
-    print(f'reading in joint value {idx}')
-    for i in range(7):
-        q_values['q{}'.format(i)].append(msg.position[i])
+    df = pd.DataFrame(observations)
 
-# for each image in the series interpolate the joint coordinates and perform obs
-for idx, (topic, msg, t) in enumerate(input_bag.read_messages(topics=image_topic)):
-    print('processing frame {}'.format(idx))
-    cv_image_timestamp = msg.header.stamp.to_sec()
-    cv2_img = bridge.imgmsg_to_cv2(msg, "bgr8")
-
-    q_image = []
-    for i in range(7):
-        qi = np.interp(cv_image_timestamp, q_values['timestamp'], q_values['q{}'.format(i)])
-        q_image.append(qi)
-    q_image = np.array(q_image)
-    list_obs_img = ParameterEstimator.observe(cv2_img, q_image, aruco_params, time)  # observations made on that frame
-    for obs in list_obs_img:  # sort all observations into a dictionary based on tag id
-        marker_id = obs['id']
-        if not marker_id in observations:  # if this id was not yet used initialize list for it
-            observations[marker_id] = []
-        observations[marker_id].append(obs)
-        num_obs = num_obs + 1
-    print(f'num obs: {num_obs}')
+    return df
 
 
+recorded_observations = process_bag_file(input_bag_file, image_topic, q_topic)
 timestr = time.strftime("%Y%m%d-%H%M%S")
 observations_file_str = "obs_{}_{}.p".format(os.path.splitext(os.path.basename(input_bag_file))[0], timestr)
-observations_file = open(observations_file_str, 'wb')
-pickle.dump(observations, observations_file)
-observations_file.close()
+
+pd.to_pickle(recorded_observations, observations_file_str)
+
 print("file saved as {}".format(observations_file_str))

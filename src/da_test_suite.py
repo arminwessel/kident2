@@ -1,15 +1,20 @@
 import datetime
 from da_test_suite_functions import *
 from exp_data_handler import *
+from robot import RobotDescription
 
 
 def do_experiment(parameter_id_masks, factor, observations_file_select, observations_file_str_dict,
                   num_iterations, residual_norm_tolerance, k_obs):
+
+    ##########################################################################
+    # 1) Define robot parameters to be used
+    ##########################################################################
     # import nominal parameters
-    theta_nom = ParameterEstimator.dhparams["theta_nom"].astype(float)
-    d_nom = ParameterEstimator.dhparams["d_nom"].astype(float)
-    r_nom = ParameterEstimator.dhparams["r_nom"].astype(float)
-    alpha_nom = ParameterEstimator.dhparams["alpha_nom"].astype(float)
+    theta_nom = RobotDescription.dhparams["theta_nom"].astype(float)
+    d_nom = RobotDescription.dhparams["d_nom"].astype(float)
+    r_nom = RobotDescription.dhparams["r_nom"].astype(float)
+    alpha_nom = RobotDescription.dhparams["alpha_nom"].astype(float)
     nominal_parameters = {'theta': theta_nom, 'd': d_nom, 'r': r_nom, 'alpha': alpha_nom}
 
     # apply the errors - model the real robot
@@ -19,13 +24,24 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     alpha_error = apply_error_to_params(alpha_nom, parameter_id_masks['alpha'], factor, 'deg_to_rad')
     error_parameters = {'theta': theta_error, 'd': d_error, 'r': r_error, 'alpha': alpha_error}
 
-
+    ##########################################################################
+    # 2) Import and filter observations to be used, generate pairs
+    ##########################################################################
     # import selected observations
-    observations_file = open(observations_file_str_dict[observations_file_select], 'rb')
-    observations = pickle.load(observations_file)
-    observations_file.close()
+    df_observations = pd.read_pickle(observations_file_str_dict[observations_file_select])
+    num_obs_unfiltered = df_observations.shape[0]  # number of records before filtering
 
+    # filter
+    # example : df_obs_filt = df_observations[df_observations['marker_id'] == 2]
+    df_obs_filt = df_observations
+    num_obs_filtered = df_obs_filt.shape[0]  # number of records before filtering
+    filter_comment = ""
 
+    obs_pairs = create_pairs_random(df_obs_filtered)  # returns a list of pairs using up all rows of the df
+
+    ##########################################################################
+    # 3) Define which parameters should be identified
+    ##########################################################################
     # number of parameters to identify
     total_id_mask = (parameter_id_masks['theta'] + parameter_id_masks['d']
                      + parameter_id_masks['r'] + parameter_id_masks['alpha'])
@@ -48,10 +64,10 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
         print(f'   pass {itervar}')
         # below the observation are describing a robot with nominal parameters, and the identification is given
         # the error parameters - this is to be able to vary the error easily
-        current_errors, current_estimate, additional_info = identify(observations,
-                                                                                        k_obs,
-                                                                                        current_estimate,
-                                                                                        parameter_id_masks)
+        current_errors, current_estimate, additional_info = identify(obs_pairs,
+                                                                     k_obs,
+                                                                     current_estimate,
+                                                                     parameter_id_masks)
         list_marker_locations = additional_info['marker_locations']
         jac_quality = additional_info['jac_quality']
         residuals_i = additional_info['residuals']
@@ -89,12 +105,14 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
 
     simulated_errors = diff_dictionaries(nominal_parameters, error_parameters)
     identified_errors = diff_dictionaries(current_estimate, error_parameters)
-    dataframe = result_to_df(simulated_errors, identified_errors)
+    df_result = result_to_df(simulated_errors, identified_errors)
 
     exp_handler = ExperimentDataHandler()
     exp_handler.add_figure(fig_error_evolution, 'error_evolution')
     exp_handler.add_figure(fig_param_evolution, 'param_evolution')
     exp_handler.add_note(f"nominal params: \n{ParameterEstimator.dhparams}\n\n" +
+                         f"filtering: {num_obs_filtered}/{num_obs_unfiltered} used\n\n" +
+                         f"filter comment: {filter_comment}\n\n "
                          f"parameter identification masks\n{parameter_id_masks}\n\n" +
                          f"error factor\n{factor}\n\n" +
                          f"parameters with errors: \n{error_parameters}\n\n" +
@@ -104,8 +122,8 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
                          f"method used \n {method_used}\n\n" +
                          f"k_obs: \n {k_obs}", 'settings')
     exp_handler.add_note(f"norm residuals evolution \n{norm_residuals_evolution}\n\n", 'norm_convergence')
-    exp_handler.add_note(f"{np.sqrt(dataframe['identification_accuracy'].pow(2).mean())}", 'residual_error_RMS')
-    exp_handler.add_df(dataframe, 'data')
+    exp_handler.add_note(f"{np.sqrt(df_result['identification_accuracy'].pow(2).mean())}", 'residual_error_RMS')
+    exp_handler.add_df(df_result, 'data')
     exp_handler.add_marker_location(list_marker_locations[-1], 'last_marker_locations')
     exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp')
 

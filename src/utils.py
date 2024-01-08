@@ -5,6 +5,25 @@ Utility Functions
 import cv2
 import numpy as np
 import math as m
+import pickle
+import pandas as pd
+
+
+def save_df_to_pickle(df, filename):
+    df_as_records = df.to_dict('records')
+    observations_file = open(filename, 'wb')
+    pickle.dump(df_as_records, observations_file)
+    observations_file.close()
+    print("file saved as {}".format(filename))
+
+
+def open_df_from_pickle(filename):
+    observations_file = open(filename, 'rb')
+    df_as_records = pickle.load(observations_file)
+    observations_file.close()
+    return pd.DataFrame(df_as_records)
+
+
 
 def H_rvec_tvec(rvec,tvec):
     rotmat, _ = cv2.Rodrigues(np.array(rvec).flatten())
@@ -46,6 +65,27 @@ def merge_H_transform(R, tvec):
         axis=0
     )
     return H
+
+
+def get_interp_distance(array, value):
+    """
+    find the distance between value the nearest element of the array
+    """
+    array = np.asarray(array)
+    idx = np.nanargmin(np.abs(array - value))
+    return np.abs(array[idx]-value)
+
+
+def interpolate_vector(t0, meas_times, meas_values):
+    """
+    t0 time at which to evaluate each data series
+    meas_times time series of measurements
+    meas_values (n,m) array of n measurement series with m values each
+    """
+    f0 = np.zeros(np.shape(meas_values)[0])
+    for i, data_series in enumerate(meas_values):
+        f0[i] = np.interp(t0, meas_times, data_series)
+    return f0
 
 
 def roundprint(H, mode='print'):
