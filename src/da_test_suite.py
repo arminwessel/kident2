@@ -5,7 +5,7 @@ from robot import RobotDescription
 
 
 def do_experiment(parameter_id_masks, factor, observations_file_select, observations_file_str_dict,
-                  num_iterations, residual_norm_tolerance, k_obs):
+                  num_iterations, residual_norm_tolerance):
 
     ##########################################################################
     # 1) Define robot parameters to be used
@@ -32,12 +32,16 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     num_obs_unfiltered = df_observations.shape[0]  # number of records before filtering
 
     # filter
-    # example : df_obs_filt = df_observations[df_observations['marker_id'] == 2]
-    df_obs_filt = df_observations
+    df_obs_filt = reject_outliers_by_mahalanobis_dist(num_obs_unfiltered)
     num_obs_filtered = df_obs_filt.shape[0]  # number of records before filtering
     filter_comment = ""
 
-    obs_pairs = create_pairs_random(df_obs_filtered)  # returns a list of pairs using up all rows of the df
+    # pair up the observations
+    marker_ids = set(df_obs_filt['marker_id'])
+    obs_pairs = []
+    for marker_id in marker_ids:
+        df_single_marker = df_obs_filt[df_obs_filt['marker_id'] == marker_id]
+        obs_pairs.extend(create_pairs_random(df_single_marker.to_dict('records')))
 
     ##########################################################################
     # 3) Define which parameters should be identified
@@ -47,12 +51,6 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
                      + parameter_id_masks['r'] + parameter_id_masks['alpha'])
     num_to_ident = sum(bool(x) for x in total_id_mask)  # number of parameters to identify
 
-    # initialize list for collecting current marker ids
-    current_marker = [None]
-
-    # initialize list to save marker location as observed
-    list_marker_locations = list()
-
     # run identification as a loop
     current_estimate = error_parameters
     current_error_evolution = []
@@ -60,15 +58,14 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     estimated_errors_evolution = []
     norm_residuals_evolution = []
     print('begin iterative solving process')
+    # todo: maybe do a while loop until threshold, and an extra statement for a max number of iterations
     for itervar in range(num_iterations):
         print(f'   pass {itervar}')
         # below the observation are describing a robot with nominal parameters, and the identification is given
         # the error parameters - this is to be able to vary the error easily
         current_errors, current_estimate, additional_info = identify(obs_pairs,
-                                                                     k_obs,
                                                                      current_estimate,
                                                                      parameter_id_masks)
-        list_marker_locations = additional_info['marker_locations']
         jac_quality = additional_info['jac_quality']
         residuals_i = additional_info['residuals']
         method_used = additional_info['method_used']
@@ -110,30 +107,32 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     exp_handler = ExperimentDataHandler()
     exp_handler.add_figure(fig_error_evolution, 'error_evolution')
     exp_handler.add_figure(fig_param_evolution, 'param_evolution')
-    exp_handler.add_note(f"nominal params: \n{ParameterEstimator.dhparams}\n\n" +
+    exp_handler.add_note(f"nominal params: \n{RobotDescription.dhparams}\n\n" +
                          f"filtering: {num_obs_filtered}/{num_obs_unfiltered} used\n\n" +
                          f"filter comment: {filter_comment}\n\n "
                          f"parameter identification masks\n{parameter_id_masks}\n\n" +
                          f"error factor\n{factor}\n\n" +
                          f"parameters with errors: \n{error_parameters}\n\n" +
                          f"observations file: \n {observations_file_str_dict[observations_file_select]}\n\n" +
-                         f"number of iterations: \n {num_iterations} \n\n " +
+                         f"number of iterations: \n {itervar}/{num_iterations} \n\n " +
                          f"residual_norm_tolerance: \n {residual_norm_tolerance}\n\n" +
                          f"method used \n {method_used}\n\n" +
-                         f"k_obs: \n {k_obs}", 'settings')
+                         f"jacobian quality\n{jac_quality}\n\n",
+                         'info')
     exp_handler.add_note(f"norm residuals evolution \n{norm_residuals_evolution}\n\n", 'norm_convergence')
     exp_handler.add_note(f"{np.sqrt(df_result['identification_accuracy'].pow(2).mean())}", 'residual_error_RMS')
     exp_handler.add_df(df_result, 'data')
-    exp_handler.add_marker_location(list_marker_locations[-1], 'last_marker_locations')
+    # exp_handler.add_marker_location(list_marker_locations[-1], 'last_marker_locations')
     exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp')
 
 ########################### SETTINGS ###########################
 # define which parameters are to be identified
 parameter_id_masks = dict()
-parameter_id_masks['theta'] =   [False, True, True, True, True, True, True, True]
-parameter_id_masks['d'] =       [False, True, True, True, True, True, True, True]
-parameter_id_masks['r'] =       [False, True, True, True, True, True, True, True]
-parameter_id_masks['alpha'] =   [False, True, True, True, True, True, True, True]
+parameter_id_masks['theta'] =   [False, True, True, True, True, True, True, True, False]
+parameter_id_masks['d'] =       [False, True, True, True, True, True, True, True, False]
+parameter_id_masks['r'] =       [False, True, True, True, True, True, True, True, False]
+parameter_id_masks['alpha'] =   [False, True, True, True, True, True, True, True, False]
+
 
 # set scaling factor for error
 factor = 30
@@ -150,11 +149,10 @@ observations_file_str_dict = {1: r'observation_files/obs_2007_gazebo_iiwa_stoppi
                               14: r'observation_files/observations_simulated_w_error_T5_R5_num240_time20231027_113914.p',
                               15: r'observation_files/observations_simulated_w_error_T10_R10_num240_time20231027_113914.p',
                               16: r'observation_files/observations_simulated_w_error_T20_R20_num240_time20231027_113914.p',
-                              17: r'observation_files/observations_simulated_w_error_T30_R30_num240_time20231027_113914.p'}
+                              17: r'observation_files/observations_simulated_w_error_T30_R30_num240_time20231027_113914.p',
+                              20: r'observation_files/obs_single_marker_2023-11-01-11-12-21_20240109-060457.p',
+                              21: r'observation_files/observations_simulated_20240109_081340.p'}
 
-
-# max number of observations per marker: number or 'all'
-k_obs = 200
 
 # set maximal number of iterations
 num_iterations = 12
@@ -167,8 +165,7 @@ residual_norm_tolerance = 1e-3
 #         do_experiment(parameter_id_masks, factor, observations_file_select,
 #                       observations_file_str_dict, num_iterations, residual_norm_tolerance)
 
-for observations_file_select in [6]:
-    for factor in [0]:
-        for k_obs in [50]:
-            do_experiment(parameter_id_masks, factor, observations_file_select,
-                          observations_file_str_dict, num_iterations, residual_norm_tolerance, k_obs)
+for observations_file_select in [20]:
+    for factor in [10]:
+        do_experiment(parameter_id_masks, factor, observations_file_select,
+                      observations_file_str_dict, num_iterations, residual_norm_tolerance)

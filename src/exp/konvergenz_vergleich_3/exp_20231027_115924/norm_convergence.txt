@@ -1,3 +1,0 @@
-norm residuals evolution 
-[9.552922012194525e-14]
-

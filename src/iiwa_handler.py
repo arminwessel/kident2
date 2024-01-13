@@ -241,7 +241,7 @@ class IiwaHandler:
                                          np.array([0, 0, 0, 1]),  # identity rotation
                                          rospy.Time.now(),
                                          'r1/cam',
-                                         'r1/8')
+                                         'r1/9')
 
 
 # Node

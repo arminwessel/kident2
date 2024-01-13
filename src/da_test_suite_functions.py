@@ -21,9 +21,12 @@ def apply_error_to_params(nominal_values, mask, factor, convert):
     Adds scaled errors to nominal parameters, so that robot configurations can be simulated with defined errors.
     The mask allows to enable/disable the identification of each parameter
     """
-    # normal distribution around 0 with sigma=1
-    normal_dist = np.array([0.1813318,  0.88292639,  0.67721319, -0.94740093,
-                            -0.45521845, -0.38626203,  0.85088985, -0.49172579])
+    assert len(mask) == len(nominal_values)
+    # normal_dist = np.random.normal(loc=0, scale=0.5, size=9)
+    normal_dist = np.array([-0.6274679, 0.34133149, 0.80774212, -0.09451298,
+                            0.482459, -0.26949728, -0.18944198, 0.67041971, 0.58972272])
+    normal_dist = normal_dist[0:len(nominal_values)]  # use as many errors as there are values
+
     if convert == 'm_to_mm':
         normal_dist_converted = normal_dist/1000
     elif convert == 'deg_to_rad':
@@ -31,7 +34,9 @@ def apply_error_to_params(nominal_values, mask, factor, convert):
     else:
         print('no conversion given')
         normal_dist_converted = normal_dist
-    param_with_errors = [value + factor * error if apply else value for apply, value, error in zip(mask, nominal_values, normal_dist_converted)]
+    param_with_errors = [value + factor * error if apply else value for apply, value, error in zip(mask,
+                                                                                                   nominal_values,
+                                                                                                   normal_dist_converted)]
     return param_with_errors
 
 
@@ -60,9 +65,12 @@ def asCartesian(r, theta, phi):
 
 
 def create_pairs_random(input_list):
-    # TODO write this from ipynb
-    return None
-
+    pairs = []
+    while len(input_list) > 1:
+        element1 = input_list.pop(random.randrange(len(input_list)))
+        element2 = input_list.pop(random.randrange(len(input_list)))
+        pairs.append((element1, element2))
+    return pairs
 
 
 def identify(obs_pairs, expected_parameters, parameter_id_masks, method='lm'):
@@ -75,7 +83,6 @@ def identify(obs_pairs, expected_parameters, parameter_id_masks, method='lm'):
     of identify is expressed with respect to these parameters
 
     """
-
     # parameters to use for calculating jacobian
     theta = np.array(expected_parameters['theta'])
     d = np.array(expected_parameters['d'])
@@ -85,9 +92,10 @@ def identify(obs_pairs, expected_parameters, parameter_id_masks, method='lm'):
     array_expected_params = np.concatenate((theta, d, r, alpha))
     num_params = len(array_expected_params)
     positions = np.arange(num_params)
+    param_names = [p+'_'+str(i) for p in ['theta', 'd', 'r', 'alpha'] for i in range(len(theta))]
 
     # calculate jacobian
-    jacobian_tot, errors_tot, jac_quality = RobotDescription.get_jacobian(obs_pairs, theta, d, r, alpha)
+    jacobian_tot, errors_tot, jac_quality = RobotDescription.get_linear_model(obs_pairs, theta, d, r, alpha)
 
     # number of parameters to identify
     total_id_mask = (parameter_id_masks['theta'] + parameter_id_masks['d']
@@ -98,11 +106,13 @@ def identify(obs_pairs, expected_parameters, parameter_id_masks, method='lm'):
     jacobian_tot_reduced = np.delete(jacobian_tot, np.where(np.logical_not(total_id_mask)), axis=1)
     ##########
     mat_q, mat_r = np.linalg.qr(jacobian_tot_reduced)
-    diag_r = np.diagonal(mat_r)
-    rank = np.linalg.matrix_rank(jacobian_tot_reduced)
+    jac_quality['qr_diag_r_reduced_jacobian'] = np.diagonal(mat_r)
+    jac_quality['rank_full_jacobian'] = np.linalg.matrix_rank(jacobian_tot_reduced)
+
     ##########
     expected_parameters_reduced = np.delete(array_expected_params, np.where(np.logical_not(total_id_mask)))
     positions_reduced = np.delete(positions, np.where(np.logical_not(total_id_mask)))
+    param_names_reduced = np.delete(param_names, np.where(np.logical_not(total_id_mask)))
 
     if method == 'lsq':
         errors_reduced, _, _, _ = np.linalg.lstsq(jacobian_tot_reduced, errors_tot)
@@ -120,7 +130,8 @@ def identify(obs_pairs, expected_parameters, parameter_id_masks, method='lm'):
     est_theta, est_d, est_r, est_alpha = np.split(array_estimated_params, 4)
     estimated_params = {'theta': est_theta, 'd': est_d, 'r': est_r, 'alpha': est_alpha}
 
-    additional_info = {'jac_quality': jac_quality,
+    additional_info = {'identified_param_names': param_names,
+                       'jac_quality': jac_quality,
                        'residuals': residuals(errors_reduced, errors_tot, jacobian_tot_reduced),
                        'method_used': method}
     return estimated_errors, estimated_params, additional_info

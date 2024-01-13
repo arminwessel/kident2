@@ -2,6 +2,7 @@ import numpy as np
 import utils
 import cv2
 from scipy.spatial.transform import Rotation as R
+import math as m
 from itertools import combinations
 import random
 
@@ -14,12 +15,19 @@ class RobotDescription:
     pi = np.pi
 
     # nominal MDH Parameters of Kuka iiwa 14 with additional camera at ee
-    dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, pi]),
-                "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0]),
-                "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0, 0.281]),
-                "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, 0]),
+    # dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, pi, 0]),
+    #             "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    #             "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0, 0, 0.281]),
+    #             "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, pip2, pip2]),
+    #             "num_joints": 7,
+    #             "num_cam_extrinsic": 2}  # camera extrinsic calib
+
+    dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, pi, 0]),
+                "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0, 0.281, 0]),
+                "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, 0, 0]),
                 "num_joints": 7,
-                "num_emdh": 1}  # joint can be actuated
+                "num_cam_extrinsic": 2}  # camera extrinsic calib
 
     # Correction matrix for camera between ros and opencv
     T_corr = np.array([[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]])
@@ -40,35 +48,9 @@ class RobotDescription:
                     'detector_params': cv2.aruco.DetectorParameters_create()}
 
 
-    # @staticmethod
-    # def create_obs_pairs(observations, k_obs):
-    #     """
-    #     """
-    #     obs_pairs = []
-    #
-    #     # loop over all markers in observations
-    #     for markerid in list(observations)[:]:
-    #         num_observed = 0
-    #         count = 0
-    #
-    #         # compute all possible pairs from observations of this marker
-    #         comparisons = []
-    #         for obs1, obs2 in combinations(observations[markerid], 2):
-    #             count = count + 1
-    #             comparisons.append((obs1, obs2))
-    #
-    #         # randomly choose a limited number of these comparisons except if k_obs == 'all'
-    #         if k_obs == 'all':
-    #             comparisons_reduced = comparisons
-    #         else:
-    #             comparisons_reduced = random.choices(comparisons, k=k_obs)
-    #
-    #     return comparisons_reduced
-
-
 
     @staticmethod
-    def get_jacobian(observation_pairs, theta, d, r, alpha):
+    def get_linear_model(observation_pairs, theta, d, r, alpha):
         """
         observation_pairs is a list of observation pairs for which the jacobian is to be computed
         """
@@ -77,10 +59,10 @@ class RobotDescription:
         errors_tot = np.zeros(0)
 
         for obs1, obs2 in observation_pairs:
-            pose_error = RobotDescription.get_model_error(obs2, obs2, theta, d, r, alpha)
+            pose_error = RobotDescription.get_model_error(obs1, obs2, theta, d, r, alpha)
 
-            q1 = np.hstack((np.array(obs1["q"]), np.zeros(1)))
-            q2 = np.hstack((np.array(obs2["q"]), np.zeros(1)))
+            q1 = np.hstack((np.array(obs1["q"]), np.zeros(RobotDescription.dhparams['num_cam_extrinsic'])))
+            q2 = np.hstack((np.array(obs2["q"]), np.zeros(RobotDescription.dhparams['num_cam_extrinsic'])))
 
             # calculate the corresponding difference jacobian
             jacobian = RobotDescription.get_parameter_jacobian_improved(q1=q1, q2=q2,
@@ -96,7 +78,7 @@ class RobotDescription:
         mat_q, mat_r = np.linalg.qr(jacobian_tot)
         diag_r = np.diagonal(mat_r)
         rank = np.linalg.matrix_rank(jacobian_tot)
-        jacobian_quality = {'qr_criterion': diag_r, 'rank': rank}
+        jacobian_quality = {'qr_diag_r_full_jacobian': diag_r, 'rank_full_jacobian': rank}
 
         # return jacobian_tot, errors_tot, list_marker_locations, jacobian_quality
         return jacobian_tot, errors_tot, jacobian_quality
@@ -133,7 +115,7 @@ class RobotDescription:
             r = r_all[i]
             alpha = alpha_all[i]
             # coordinate transform for current link
-            T = T_N1_0 @ self.get_T_jk(0, i+1, q2, theta_all, d_all, r_all, alpha_all)  # T from N1 to i2 (via 0)
+            T = T_N1_0 @ RobotDescription.get_T_jk(0, i+1, q2, theta_all, d_all, r_all, alpha_all)  # T from N1 to i2 (via 0)
             t = T[0:3, 3]
             R = T[0:3, 0:3]
 
@@ -204,26 +186,26 @@ class RobotDescription:
         calculate the difference between calculated and measured pose difference of two observtations
         """
 
-        q1 = np.hstack((np.array(obs1["q"]), np.zeros(1)))
-        q2 = np.hstack((np.array(obs2["q"]), np.zeros(1)))
+        q1 = np.hstack((np.array(obs1["q"]), np.zeros(RobotDescription.dhparams['num_cam_extrinsic'])))
+        q2 = np.hstack((np.array(obs2["q"]), np.zeros(RobotDescription.dhparams['num_cam_extrinsic'])))
 
         T_CM_1 = obs1['mat']
         T_CM_2 = obs2['mat']
 
 
-        T_08_1 = RobotDescription.get_T_jk(0, 8, q1, theta, d, r, alpha)
-        T_08_2 = RobotDescription.get_T_jk(0, 8, q2, theta, d, r, alpha)
+        T_0_cam_1 = RobotDescription.get_T_0_cam(q1, theta, d, r, alpha)
+        T_0_cam_2 = RobotDescription.get_T_0_cam(q2, theta, d, r, alpha)
 
         # perform necessary inversions
         T_MC_2 = np.linalg.inv(T_CM_2)
-        T_80_1 = np.linalg.inv(T_08_1)
+        T_cam_0_1 = np.linalg.inv(T_0_cam_1)
 
         # T_WM_1 = pe.T_W0 @ T_08_1 @ T_CM_1
         # if markerid == 2 or True:
         #     list_marker_locations.append([T_WM_1[0, 3], T_WM_1[1, 3], T_WM_1[2, 3]])
 
         D_meas = T_CM_1 @ T_MC_2
-        D_nom = T_80_1 @ T_08_2
+        D_nom = T_cam_0_1 @ T_0_cam_2
         delta_D = D_meas @ np.linalg.inv(D_nom)
         delta_D_skew = 0.5 * (delta_D - delta_D.T)
 
@@ -261,7 +243,7 @@ class RobotDescription:
         """
         joint_tfs = []  # initialize list
         q_vec = q_vec.flatten()
-        q_vec = np.append(q_vec, np.zeros(RobotDescription.dhparams["num_emdh"]))  # pad q vector with zero for non actuated last transform
+        q_vec = np.append(q_vec, np.zeros(RobotDescription.dhparams["num_cam_extrinsic"]))  # pad q vector with zero for non actuated last transform
         for (i, q) in enumerate(q_vec):  # iterate over joint values
             theta = RobotDescription.dhparams["theta_nom"][i]
             d = RobotDescription.dhparams["d_nom"][i]
@@ -321,7 +303,7 @@ class RobotDescription:
         # Store the translation (i.e. position) information
         rotation_matrix, translation = utils.split_H_transform(tf_matrix)
         r = R.from_matrix(rotation_matrix[0:3, 0:3])
-        return {'rotmat': rotation_matrix, 'quat': r.as_quat(), 'rvec':r.as_rotvec(), 'tvec':translation}
+        return {'rotmat': rotation_matrix, 'quat': r.as_quat(), 'rvec': r.as_rotvec(), 'tvec': translation}
 
 
     @staticmethod
@@ -357,6 +339,7 @@ class RobotDescription:
         """
         T = np.eye(4)
         q = q.flatten()
+        assert len(q) == len(theta_all) == len(d_all) == len(r_all) == len(alpha_all)
         theta_all, d_all, r_all, alpha_all = theta_all.flatten(), d_all.flatten(), r_all.flatten(), alpha_all.flatten()
         if j == k:  # transform is identity
             return T
@@ -373,3 +356,14 @@ class RobotDescription:
                 T = T @ _T
             return T
 
+
+    @staticmethod
+    def get_T_0_cam(q, theta_all, d_all, r_all, alpha_all):
+        j = 0
+        k = RobotDescription.dhparams['num_joints'] + RobotDescription.dhparams['num_cam_extrinsic']
+        return RobotDescription.get_T_jk(j, k, q, theta_all, d_all, r_all, alpha_all)
+
+    @staticmethod
+    def get_marker_location(T_CM, q, theta_all, d_all, r_all, alpha_all):
+        T_0cam = RobotDescription.get_T_0_cam(q, theta_all, d_all, r_all, alpha_all)
+        return RobotDescription.T_W0 @ T_0cam @ T_CM
