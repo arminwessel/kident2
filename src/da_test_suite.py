@@ -32,9 +32,11 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     num_obs_unfiltered = df_observations.shape[0]  # number of records before filtering
 
     # filter
-    df_obs_filt = reject_outliers_by_mahalanobis_dist(num_obs_unfiltered)
+    mal_threshold = 100
+    df_obs_filt = reject_outliers_by_mahalanobis_dist(df_observations, mal_threshold)
     num_obs_filtered = df_obs_filt.shape[0]  # number of records before filtering
-    filter_comment = ""
+    print(f"{num_obs_filtered} /  {num_obs_unfiltered} observations after filtering")
+    filter_comment = f"filtered with mal threshold {mal_threshold}"
 
     # pair up the observations
     marker_ids = set(df_obs_filt['marker_id'])
@@ -44,14 +46,10 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
         obs_pairs.extend(create_pairs_random(df_single_marker.to_dict('records')))
 
     ##########################################################################
-    # 3) Define which parameters should be identified
+    # 3) run identification as a loop
     ##########################################################################
-    # number of parameters to identify
-    total_id_mask = (parameter_id_masks['theta'] + parameter_id_masks['d']
-                     + parameter_id_masks['r'] + parameter_id_masks['alpha'])
-    num_to_ident = sum(bool(x) for x in total_id_mask)  # number of parameters to identify
 
-    # run identification as a loop
+
     current_estimate = error_parameters
     current_error_evolution = []
     estimated_params_evolution = []
@@ -69,6 +67,7 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
         jac_quality = additional_info['jac_quality']
         residuals_i = additional_info['residuals']
         method_used = additional_info['method_used']
+        param_names = additional_info['identified_param_names']
         norm_residuals = np.linalg.norm(residuals_i)
         norm_residuals_evolution.append(norm_residuals)
         current_error_evolution.append(current_errors)
@@ -116,6 +115,7 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
                          f"observations file: \n {observations_file_str_dict[observations_file_select]}\n\n" +
                          f"number of iterations: \n {itervar}/{num_iterations} \n\n " +
                          f"residual_norm_tolerance: \n {residual_norm_tolerance}\n\n" +
+                         f"identified param names: \n {param_names}\n\n" +
                          f"method used \n {method_used}\n\n" +
                          f"jacobian quality\n{jac_quality}\n\n",
                          'info')
@@ -128,10 +128,10 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
 ########################### SETTINGS ###########################
 # define which parameters are to be identified
 parameter_id_masks = dict()
-parameter_id_masks['theta'] =   [False, True, True, True, True, True, True, True, False]
-parameter_id_masks['d'] =       [False, True, True, True, True, True, True, True, False]
-parameter_id_masks['r'] =       [False, True, True, True, True, True, True, True, False]
-parameter_id_masks['alpha'] =   [False, True, True, True, True, True, True, True, False]
+parameter_id_masks['theta'] =   [False, True, True, True, True, True, True, False, True]
+parameter_id_masks['d'] =       [False, True, True, True, True, True, True, True, True]
+parameter_id_masks['r'] =       [False, True, True, True, True, True, False, True, True]
+parameter_id_masks['alpha'] =   [False, True, True, True, True, True, False, True, True]
 
 
 # set scaling factor for error
@@ -155,7 +155,7 @@ observations_file_str_dict = {1: r'observation_files/obs_2007_gazebo_iiwa_stoppi
 
 
 # set maximal number of iterations
-num_iterations = 12
+num_iterations = 6
 
 # tolerance to break loop
 residual_norm_tolerance = 1e-3
@@ -165,7 +165,7 @@ residual_norm_tolerance = 1e-3
 #         do_experiment(parameter_id_masks, factor, observations_file_select,
 #                       observations_file_str_dict, num_iterations, residual_norm_tolerance)
 
-for observations_file_select in [20]:
+for observations_file_select in [21]:
     for factor in [10]:
         do_experiment(parameter_id_masks, factor, observations_file_select,
                       observations_file_str_dict, num_iterations, residual_norm_tolerance)

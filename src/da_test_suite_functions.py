@@ -14,6 +14,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from pylatex import Document, NoEscape, Package
 from pathlib import Path
 from robot import RobotDescription
+from sklearn.covariance import MinCovDet
 
 
 def apply_error_to_params(nominal_values, mask, factor, convert):
@@ -130,7 +131,8 @@ def identify(obs_pairs, expected_parameters, parameter_id_masks, method='lm'):
     est_theta, est_d, est_r, est_alpha = np.split(array_estimated_params, 4)
     estimated_params = {'theta': est_theta, 'd': est_d, 'r': est_r, 'alpha': est_alpha}
 
-    additional_info = {'identified_param_names': param_names,
+    additional_info = {'param_names_reduced': param_names_reduced,
+                       'param_names': param_names,
                        'jac_quality': jac_quality,
                        'residuals': residuals(errors_reduced, errors_tot, jacobian_tot_reduced),
                        'method_used': method}
@@ -296,3 +298,40 @@ def dataframe_to_pdf(df, filename, numpages=(1, 1), pagesize=(11, 8.5)):
                 pdf.savefig(fig, bbox_inches='tight')
 
                 plt.close()
+
+
+def get_marker_locations(df):
+    marker_locations = []
+    theta_nom = RobotDescription.dhparams["theta_nom"].astype(float)
+    d_nom = RobotDescription.dhparams["d_nom"].astype(float)
+    r_nom = RobotDescription.dhparams["r_nom"].astype(float)
+    alpha_nom = RobotDescription.dhparams["alpha_nom"].astype(float)
+    for record in df.to_records():
+        q = np.concatenate([record['q'], np.zeros(2)])
+        _loc = RobotDescription.get_marker_location(record['mat'], q, theta_nom, d_nom, r_nom, alpha_nom)
+        marker_location = RobotDescription.get_alternate_tfs(_loc)
+        marker_locations.append(np.concatenate([marker_location['rvec'], marker_location['tvec']]))
+    return marker_locations
+
+
+def split_df_by_marker_id(df):
+    return [df[df['marker_id']==marker_id].copy() for marker_id in df['marker_id'].unique()]
+
+
+def reject_outliers_by_mahalanobis_dist(dataframe, threshold):
+    df_filtered = pd.DataFrame()
+    single_marker_dfs = split_df_by_marker_id(dataframe)
+    for df in single_marker_dfs:
+        locations = get_marker_locations(df)
+        cov_matrix = np.cov(locations)
+        rank_cov_matrix = np.linalg.matrix_rank(cov_matrix)
+        if rank_cov_matrix + 1 < np.shape(locations)[1]:
+            # not full rank
+            df_filtered = pd.concat([df_filtered, df])
+        else:
+            robust_cov = MinCovDet().fit(locations)
+            df.loc[:, 'mahal_dist'] = robust_cov.dist_
+            df = df[df['mahal_dist'] < threshold]
+            df_filtered = pd.concat([df_filtered, df])
+    df_filtered.reset_index()
+    return df_filtered
