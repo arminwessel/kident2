@@ -1,11 +1,14 @@
 import datetime
+
+import numpy as np
+
 from da_test_suite_functions import *
 from exp_data_handler import *
 from robot import RobotDescription
 
 
 def do_experiment(parameter_id_masks, factor, observations_file_select, observations_file_str_dict,
-                  num_iterations, residual_norm_tolerance):
+                  num_iterations, residual_norm_tolerance,  mal_threshold):
 
     ##########################################################################
     # 1) Define robot parameters to be used
@@ -32,7 +35,6 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     num_obs_unfiltered = df_observations.shape[0]  # number of records before filtering
 
     # filter
-    mal_threshold = 100
     df_obs_filt = reject_outliers_by_mahalanobis_dist(df_observations, mal_threshold)
     num_obs_filtered = df_obs_filt.shape[0]  # number of records before filtering
     print(f"{num_obs_filtered} /  {num_obs_unfiltered} observations after filtering")
@@ -54,10 +56,11 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     current_error_evolution = []
     estimated_params_evolution = []
     estimated_errors_evolution = []
-    norm_residuals_evolution = []
+    rms_residuals_evolution = []
     print('begin iterative solving process')
-    # todo: maybe do a while loop until threshold, and an extra statement for a max number of iterations
-    for itervar in range(num_iterations):
+    rms_residuals = 1e6  # init with large number
+    itervar = 0
+    while rms_residuals > residual_norm_tolerance and itervar <= num_iterations:
         print(f'   pass {itervar}')
         # below the observation are describing a robot with nominal parameters, and the identification is given
         # the error parameters - this is to be able to vary the error easily
@@ -69,18 +72,19 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
         method_used = additional_info['method_used']
         param_names = additional_info['param_names']
         reduced_param_names = additional_info['param_names_reduced']
-        norm_residuals = np.linalg.norm(residuals_i)
-        norm_residuals_evolution.append(norm_residuals)
+        rms_residuals = np.mean(np.power(residuals_i, 2))**0.5
+        rms_residuals_evolution.append(rms_residuals)
+        itervar = itervar + 1
         current_error_evolution.append(current_errors)
         estimated_params_evolution.append(current_estimate)
         estimated_errors = diff_dictionaries(current_estimate, nominal_parameters)
         estimated_errors_evolution.append(estimated_errors)
         remaining_error = np.array([estimated_errors[key] for key in estimated_errors]).flatten()
-        if norm_residuals < residual_norm_tolerance:
-            print(f'\tresiduals {norm_residuals} < tolerance {residual_norm_tolerance}')
+        if rms_residuals < residual_norm_tolerance:
+            print(f'\trms residuals {rms_residuals} < tolerance {residual_norm_tolerance}')
             break
         else:
-            print(f'\tresiduals {norm_residuals} > tolerance {residual_norm_tolerance}')
+            print(f'\trms residuals {rms_residuals} > tolerance {residual_norm_tolerance}')
 
     print('done')
 
@@ -121,7 +125,7 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
                          f"method used \n {method_used}\n\n" +
                          f"jacobian quality\n{jac_quality}\n\n",
                          'info')
-    exp_handler.add_note(f"norm residuals evolution \n{norm_residuals_evolution}\n\n", 'norm_convergence')
+    exp_handler.add_note(f"norm residuals evolution \n{rms_residuals_evolution}\n\n", 'norm_convergence')
     exp_handler.add_note(f"{np.sqrt(df_result['identification_accuracy'].pow(2).mean())}", 'residual_error_RMS')
     exp_handler.add_df(df_result, 'data')
     # exp_handler.add_marker_location(list_marker_locations[-1], 'last_marker_locations')
@@ -130,34 +134,37 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
 ########################### SETTINGS ###########################
 # define which parameters are to be identified
 parameter_id_masks = dict()
-parameter_id_masks['theta'] =   [False, True, True, True, True, True, True, True, True]
-parameter_id_masks['d'] =       [False, True, True, True, True, True, True, True, False]
-parameter_id_masks['r'] =       [False, True, True, True, True, True, True, True, True]
-parameter_id_masks['alpha'] =   [False, True, True, True, True, True, True, True, False]
+parameter_id_masks['theta'] =   [False, True, True, True, True, True, True]
+parameter_id_masks['d'] =       [False, True, True, True, True, True, True]
+parameter_id_masks['r'] =       [False, True, True, True, True, True, True]
+parameter_id_masks['alpha'] =   [False, True, True, True, True, True, True]
 
+# parameter_id_masks['theta'] =   [False, True, True, True, True, False, False]
+# parameter_id_masks['d'] =       [False, True, True, True, True, False, False]
+# parameter_id_masks['r'] =       [False, True, True, True, True, False, False]
+# parameter_id_masks['alpha'] =   [False, True, True, True, True, False, False]
 
 # set scaling factor for error
-factor = 30
+factor = 10
 
 # select observations file
-observations_file_select = 1
-observations_file_str_dict = {1: r'observation_files/obs_2007_gazebo_iiwa_stopping.bag_20230720-135812.p',
-                              5: r'observation_files/obs_bag_with_lockstep_281023_2023-10-28-14-01-49_20231028-142947.p',
-                              6: r'observation_files/obs_single_marker_2023-11-01-11-12-21_20231101-112227.p',
-                              10: r'observation_files/observations_simulated_w_error_T0_R0_num240_time20231027_113914.p',
-                              11: r'observation_files/observations_simulated_w_error_T0.1_R0.1_num240_time20231027_113914.p',
-                              12: r'observation_files/observations_simulated_w_error_T1_R1_num240_time20231027_113914.p',
-                              13: r'observation_files/observations_simulated_w_error_T2_R2_num240_time20231027_113914.p',
-                              14: r'observation_files/observations_simulated_w_error_T5_R5_num240_time20231027_113914.p',
-                              15: r'observation_files/observations_simulated_w_error_T10_R10_num240_time20231027_113914.p',
-                              16: r'observation_files/observations_simulated_w_error_T20_R20_num240_time20231027_113914.p',
-                              17: r'observation_files/observations_simulated_w_error_T30_R30_num240_time20231027_113914.p',
-                              20: r'observation_files/obs_single_marker_2023-11-01-11-12-21_20240109-060457.p',
-                              21: r'observation_files/observations_simulated_20240109_081340.p'}
+observations_file_select = 21
+observations_file_str_dict = {20: r'observation_files/obs_single_marker_2023-11-01-11-12-21_20240109-060457.p',
+                              21: r'observation_files/observations_simulated_20240109_081340.p',
+                              22: r'observations_simulated_20240124_061544_error_50.p',
+                              23: r'observations_simulated_20240124_061722_error_1.p',
+                              24: r'observations_simulated_20240124_062030_error_1.p',
+                              25: r'observations_simulated_20240124_071233_error_1.p',  # sehr viele punkte
+                              26: r'observations_simulated_20240124_071242_error_1.p', # wenige punkte -> menge der punkte scheint nichts zu ändern
+                              27: r'observations_simulated_20240128_153534_error_0.1.p', # sehr kleine fehler -> genauigkeit ist gut
+                              28: r'observations_simulated_20240128_155015_errors_rt_1_1.p'}  # fehler nur in translation
 
 
 # set maximal number of iterations
 num_iterations = 10
+
+# set filter threshold
+mal_threshold = 20
 
 # tolerance to break loop
 residual_norm_tolerance = 1e-3
@@ -167,7 +174,7 @@ residual_norm_tolerance = 1e-3
 #         do_experiment(parameter_id_masks, factor, observations_file_select,
 #                       observations_file_str_dict, num_iterations, residual_norm_tolerance)
 
-for observations_file_select in [21]:
-    for factor in [20]:
+for observations_file_select in [20]:
+    for factor in [10]:
         do_experiment(parameter_id_masks, factor, observations_file_select,
-                      observations_file_str_dict, num_iterations, residual_norm_tolerance)
+                      observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)

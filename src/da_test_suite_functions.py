@@ -1,5 +1,6 @@
 import pickle
 import numpy as np
+import scipy.linalg
 import sympy
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -109,6 +110,9 @@ def identify(obs_pairs, expected_parameters, parameter_id_masks, method='lm'):
     mat_q, mat_r = np.linalg.qr(jacobian_tot_reduced)
     jac_quality['qr_diag_r_reduced_jacobian'] = np.diagonal(mat_r)
     jac_quality['rank_full_jacobian'] = np.linalg.matrix_rank(jacobian_tot_reduced)
+    jac_quality['svdvals'] = scipy.linalg.svdvals(jacobian_tot)
+    jac_quality['svdvals_reduced_jacobian'] = scipy.linalg.svdvals(jacobian_tot_reduced)
+
 
     ##########
     expected_parameters_reduced = np.delete(array_expected_params, np.where(np.logical_not(total_id_mask)))
@@ -117,10 +121,12 @@ def identify(obs_pairs, expected_parameters, parameter_id_masks, method='lm'):
 
     if method == 'lsq':
         errors_reduced, _, _, _ = np.linalg.lstsq(jacobian_tot_reduced, errors_tot)
-    else:
+    elif method == 'lm':
         res = least_squares(fun=residuals,
                             x0=expected_parameters_reduced, method='lm', args=(errors_tot, jacobian_tot_reduced))
         errors_reduced = res.x
+    else:
+        print("No valid option for solver chosen in identify")
 
     array_errors = np.zeros(num_params)  # initialize
     array_errors[positions_reduced] = errors_reduced  # insert the identified errors at their original positions
@@ -307,7 +313,7 @@ def get_marker_locations(df):
     r_nom = RobotDescription.dhparams["r_nom"].astype(float)
     alpha_nom = RobotDescription.dhparams["alpha_nom"].astype(float)
     for record in df.to_records():
-        q = np.concatenate([record['q'], np.zeros(2)])
+        q = np.concatenate([record['q'], np.zeros(RobotDescription.dhparams['num_cam_extrinsic'])])
         _loc = RobotDescription.get_marker_location(record['mat'], q, theta_nom, d_nom, r_nom, alpha_nom)
         marker_location = RobotDescription.get_alternate_tfs(_loc)
         marker_locations.append(np.concatenate([marker_location['rvec'], marker_location['tvec']]))

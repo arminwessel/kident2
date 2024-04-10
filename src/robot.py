@@ -22,12 +22,14 @@ class RobotDescription:
     #             "num_joints": 7,
     #             "num_cam_extrinsic": 2}  # camera extrinsic calib
 
-    dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, pi, 0]),
-                "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0, 0]),
-                "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0, 0.281, 0]),
-                "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, 0, 0]),
+    dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, pi]),
+                "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0]),
+                "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0.281]),
+                "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2]),
                 "num_joints": 7,
-                "num_cam_extrinsic": 2}  # camera extrinsic calib
+                "num_cam_extrinsic": 0}  # camera extrinsic calib
+    assert dhparams['num_cam_extrinsic'] + dhparams['num_joints'] == len(dhparams['theta_nom']), ("Robot"
+                          " MDH Configuration: stated number of joints does not match lenght of vector")
 
     # Correction matrix for camera between ros and opencv
     T_corr = np.array([[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]])
@@ -50,7 +52,7 @@ class RobotDescription:
 
 
     @staticmethod
-    def get_linear_model(observation_pairs, theta, d, r, alpha):
+    def get_linear_model(observation_pairs, theta, d, r, alpha, include_rot=False):
         """
         observation_pairs is a list of observation pairs for which the jacobian is to be computed
         """
@@ -70,6 +72,10 @@ class RobotDescription:
                                                           d_all=d,
                                                           r_all=r,
                                                           alpha_all=alpha)
+
+            if not include_rot:
+                jacobian = jacobian[0:3, :]
+                pose_error = pose_error[0:3]
 
             # collect the jacobian and error resulting from these two observations
             jacobian_tot = np.concatenate((jacobian_tot, jacobian), axis=0)
