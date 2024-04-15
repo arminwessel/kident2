@@ -14,20 +14,15 @@ class RobotDescription:
     pip2 = np.pi / 2
     pi = np.pi
 
-    # nominal MDH Parameters of Kuka iiwa 14 with additional camera at ee
-    # dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, pi, 0]),
-    #             "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0, 0]),
-    #             "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0, 0, 0.281]),
-    #             "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, pip2, pip2]),
-    #             "num_joints": 7,
-    #             "num_cam_extrinsic": 2}  # camera extrinsic calib
-
-    dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, pi]),
-                "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0]),
-                "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0.281]),
-                "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2]),
+    #nominal MDH Parameters of Kuka iiwa 14 with additional camera at ee GAZEBO
+    dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0]),
+               "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0.1]),
+                "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0.3, 0]),
+                "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, 1]),
                 "num_joints": 7,
-                "num_cam_extrinsic": 0}  # camera extrinsic calib
+                "num_cam_extrinsic": 1}  # camera extrinsic calib
+
+
     assert dhparams['num_cam_extrinsic'] + dhparams['num_joints'] == len(dhparams['theta_nom']), ("Robot"
                           " MDH Configuration: stated number of joints does not match lenght of vector")
 
@@ -242,7 +237,7 @@ class RobotDescription:
         return list_obs
 
     @staticmethod
-    def get_joint_tfs(q_vec):
+    def get_joint_tfs(q_vec, params=None):
         """
         from_frame : Name of the frame for which the transformation is added in the to_frame coordinate system
         to_frame :  Name of the frame in which the transformation is defined
@@ -251,10 +246,10 @@ class RobotDescription:
         q_vec = q_vec.flatten()
         q_vec = np.append(q_vec, np.zeros(RobotDescription.dhparams["num_cam_extrinsic"]))  # pad q vector with zero for non actuated last transform
         for (i, q) in enumerate(q_vec):  # iterate over joint values
-            theta = RobotDescription.dhparams["theta_nom"][i]
-            d = RobotDescription.dhparams["d_nom"][i]
-            r = RobotDescription.dhparams["r_nom"][i]
-            alpha = RobotDescription.dhparams["alpha_nom"][i]
+            theta = params["theta_nom"][i]
+            d = params["d_nom"][i]
+            r = params["r_nom"][i]
+            alpha = params["alpha_nom"][i]
             joint_tfs.append({'mat': RobotDescription.get_T_i_forward(q, theta, d, r, alpha),
                               'from_frame': str(i+1), 'to_frame': str(i)})
 
@@ -301,7 +296,7 @@ class RobotDescription:
             est_poses.append({'mat': T_CM,
                               'marker_id': marker_id,
                               'from_frame': 'marker_'+str(marker_id),
-                              'to_frame': 'cam'})
+                              'to_frame': 'camera'})
         return est_poses
 
     @staticmethod

@@ -23,7 +23,7 @@ class ExperimentDataHandler:
 
     def save_figure(self, figure, savepath, name):
         figure.canvas.draw()
-        figure.savefig(savepath.joinpath(name + '.png'))
+        figure.savefig(savepath.joinpath(name + '.pdf'),  format='pdf', bbox_inches='tight')
         with open(savepath.joinpath(name + '.p'), 'wb') as f_handle:
             pickle.dump(figure, f_handle)
 

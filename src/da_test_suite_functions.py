@@ -97,7 +97,7 @@ def identify(obs_pairs, expected_parameters, parameter_id_masks, method='lm'):
     param_names = [p+'_'+str(i) for p in ['theta', 'd', 'r', 'alpha'] for i in range(len(theta))]
 
     # calculate jacobian
-    jacobian_tot, errors_tot, jac_quality = RobotDescription.get_linear_model(obs_pairs, theta, d, r, alpha)
+    jacobian_tot, errors_tot, jac_quality = RobotDescription.get_linear_model(obs_pairs, theta, d, r, alpha, True)
 
     # number of parameters to identify
     total_id_mask = (parameter_id_masks['theta'] + parameter_id_masks['d']
@@ -214,7 +214,7 @@ def result_to_df(dict_error, dict_result):
 def plot_evolution(titles, evolution_list):
 
     fig, ax_est = plt.subplots(2, 2)
-    fig.set_size_inches(16, 9, forward=True)
+    fig.set_size_inches(8, 4.5, forward=True)
     fig.tight_layout(pad=2)
     fig.subplots_adjust(top=0.85)
     fig.suptitle(titles['suptitle'])
@@ -232,7 +232,7 @@ def plot_evolution(titles, evolution_list):
         X = range(len(Y))
         axis[0, 0].plot(X, Y, color=next(color_palette), label=str(i))
     axis[0, 0].set_title(titles['theta'])
-    axis[0, 0].legend()
+    # axis[0, 0].legend()
 
     axis[0, 1].clear()
     for i, Y in enumerate(evolution_dict['d'].T):  # first Y is the evolution of theta 0 over time
@@ -240,7 +240,7 @@ def plot_evolution(titles, evolution_list):
         X = range(len(Y))
         axis[0, 1].plot(X, Y, color=next(color_palette), label=str(i))
     axis[0, 1].set_title(titles['d'])
-    axis[0, 1].legend()
+    # axis[0, 1].legend()
 
     axis[1, 0].clear()
     for i, Y in enumerate(evolution_dict['r'].T):  # first Y is the evolution of theta 0 over time
@@ -248,7 +248,8 @@ def plot_evolution(titles, evolution_list):
         X = range(len(Y))
         axis[1, 0].plot(X, Y, color=next(color_palette), label=str(i))
     axis[1, 0].set_title(titles['r'])
-    axis[1, 0].legend()
+    axis[1, 0].set_xlabel("iterations")
+    # axis[1, 0].legend()
 
 
     axis[1, 1].clear()
@@ -257,7 +258,14 @@ def plot_evolution(titles, evolution_list):
         X = range(len(Y))
         axis[1, 1].plot(X, Y, color=next(color_palette), label=str(i))
     axis[1, 1].set_title(titles['alpha'])
-    axis[1, 1].legend()
+    axis[1, 1].set_xlabel("iterations")
+    # axis[1, 1].legend()
+
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.23)  ##  Need to play with this number.
+
+    labels = [f"link {i}" for i in range(1, len(evolution_dict['theta'].T)+1)]
+    fig.legend(labels=labels, loc="lower center", ncol=4)
 
     return fig
 

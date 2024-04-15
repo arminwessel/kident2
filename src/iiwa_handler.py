@@ -206,6 +206,7 @@ class IiwaHandler:
         # broadcast the frames for the robot joints
         qs, t = self.qs[-1]
         qs = qs.flatten()
+        #qs = np.concatenate((qs, np.zeros(RobotDescription.dhparams["num_cam_extrinsic"])))
         joint_tfs = RobotDescription.get_joint_tfs(qs)
 
         for transform in joint_tfs:
@@ -236,12 +237,12 @@ class IiwaHandler:
                                              rospy.Time.now(),
                                              'r1/' + transform['from_frame'],
                                              'r1/' + transform['to_frame'])
-
+        num_joint_tfs = RobotDescription.dhparams["num_joints"] + RobotDescription.dhparams["num_cam_extrinsic"]
         self.tfbroadcaster.sendTransform(np.array([0, 0, 0]),  # identity translation
                                          np.array([0, 0, 0, 1]),  # identity rotation
                                          rospy.Time.now(),
                                          'r1/cam',
-                                         'r1/9')
+                                         f'r1/{num_joint_tfs}')
 
 
 # Node

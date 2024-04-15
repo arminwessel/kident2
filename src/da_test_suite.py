@@ -50,8 +50,6 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     ##########################################################################
     # 3) run identification as a loop
     ##########################################################################
-
-
     current_estimate = error_parameters
     current_error_evolution = []
     estimated_params_evolution = []
@@ -134,30 +132,22 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
 ########################### SETTINGS ###########################
 # define which parameters are to be identified
 parameter_id_masks = dict()
-parameter_id_masks['theta'] =   [False, True, True, True, True, True, True]
-parameter_id_masks['d'] =       [False, True, True, True, True, True, True]
-parameter_id_masks['r'] =       [False, True, True, True, True, True, True]
-parameter_id_masks['alpha'] =   [False, True, True, True, True, True, True]
+parameter_id_masks['theta'] =   [False, True, True, True, True, True, True, True]
+parameter_id_masks['d'] =       [False, True, True, True, True, True, True, True]
+parameter_id_masks['r'] =       [False, True, True, True, True, True, True, True]
+parameter_id_masks['alpha'] =   [False, True, True, True, True, True, True, True]
 
-# parameter_id_masks['theta'] =   [False, True, True, True, True, False, False]
-# parameter_id_masks['d'] =       [False, True, True, True, True, False, False]
-# parameter_id_masks['r'] =       [False, True, True, True, True, False, False]
-# parameter_id_masks['alpha'] =   [False, True, True, True, True, False, False]
 
 # set scaling factor for error
-factor = 10
+#factor = 0 # set in loop
 
 # select observations file
-observations_file_select = 21
-observations_file_str_dict = {20: r'observation_files/obs_single_marker_2023-11-01-11-12-21_20240109-060457.p',
-                              21: r'observation_files/observations_simulated_20240109_081340.p',
-                              22: r'observations_simulated_20240124_061544_error_50.p',
-                              23: r'observations_simulated_20240124_061722_error_1.p',
-                              24: r'observations_simulated_20240124_062030_error_1.p',
-                              25: r'observations_simulated_20240124_071233_error_1.p',  # sehr viele punkte
-                              26: r'observations_simulated_20240124_071242_error_1.p', # wenige punkte -> menge der punkte scheint nichts zu ändern
-                              27: r'observations_simulated_20240128_153534_error_0.1.p', # sehr kleine fehler -> genauigkeit ist gut
-                              28: r'observations_simulated_20240128_155015_errors_rt_1_1.p'}  # fehler nur in translation
+#observations_file_select = 21 # set in loop
+
+observations_file_str_dict = {0:  r'observation_files/ground_truth_dataset.p',
+                              20: r'observation_files/obs_single_marker_2023-11-01-11-12-21_20240109-060457.p',
+                              21: r'observation_files/observations_simulated_20240411_144805.p'
+                              }
 
 
 # set maximal number of iterations
@@ -174,7 +164,7 @@ residual_norm_tolerance = 1e-3
 #         do_experiment(parameter_id_masks, factor, observations_file_select,
 #                       observations_file_str_dict, num_iterations, residual_norm_tolerance)
 
-for observations_file_select in [20]:
-    for factor in [10]:
+for observations_file_select in [0]:
+    for factor in [30]:
         do_experiment(parameter_id_masks, factor, observations_file_select,
                       observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)
