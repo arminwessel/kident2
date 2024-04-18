@@ -16,29 +16,44 @@ from pylatex import Document, NoEscape, Package
 from pathlib import Path
 from robot import RobotDescription
 from sklearn.covariance import MinCovDet
+from pytransform3d.transform_manager import *
+from acin_colors import acin_colors
 
 
-def apply_error_to_params(nominal_values, mask, factor, convert):
+def get_errors(length):
+    normal_errors = np.array(  [-0.0045, 0.0065, -0.0170, 0.0096, -0.0034,
+                                -0.0252, 0.0025, -0.0126, 0.0165, 0.0044,
+                                -0.0209, -0.0009, -0.0054, 0.0008, -0.0074,
+                                0.0130, -0.0090, 0.0063, -0.0159, -0.0018,
+                                0.0072, -0.0054, 0.0022, 0.0038, 0.0123,
+                                -0.0001, 0.0004, 0.0127, 0.0052, -0.0041,
+                                -0.0093, -0.0012, -0.0044, 0.0014, -0.0032,
+                                -0.0066, -0.0029, 0.0002, -0.0102, -0.0063,
+                                -0.0001, 0.0126, 0.0001, -0.0171, 0.0152,
+                                -0.0041, 0.0190, 0.0142, -0.0185, -0.0041,
+                                0.0032, 0.0010, 0.0055, 0.0088, -0.0064,
+                                0.0065, 0.0070, -0.0096, 0.0213, -0.0052,
+                                0.0146, -0.0035, -0.0032, -0.0035, 0.0069,
+                                -0.0119, 0.0030, -0.0025, 0.0232, 0.0112,
+                                0.0152, -0.0116, -0.0074, -0.0132, -0.0015,
+                                0.0089, -0.0064, 0.0017, 0.0108, -0.0000,
+                                0.0107, 0.0013, 0.0041, -0.0039, 0.0037,
+                                -0.0048, -0.0016, -0.0140, -0.0064, -0.0035,
+                                0.0174, -0.0006, 0.0067, -0.0158, 0.0020,
+                                0.0131, -0.0096, 0.0285, 0.0161, 0.0050])
+    return np.random.choice(normal_errors, length)
+
+
+def apply_error_to_params(nominal_values, mask, errors, factor):
     """
     Adds scaled errors to nominal parameters, so that robot configurations can be simulated with defined errors.
     The mask allows to enable/disable the identification of each parameter
     """
     assert len(mask) == len(nominal_values)
-    # normal_dist = np.random.normal(loc=0, scale=0.5, size=9)
-    normal_dist = np.array([-0.6274679, 0.34133149, 0.80774212, -0.09451298,
-                            0.482459, -0.26949728, -0.18944198, 0.67041971, 0.58972272])
-    normal_dist = normal_dist[0:len(nominal_values)]  # use as many errors as there are values
 
-    if convert == 'm_to_mm':
-        normal_dist_converted = normal_dist/1000
-    elif convert == 'deg_to_rad':
-        normal_dist_converted = normal_dist/180*np.pi
-    else:
-        print('no conversion given')
-        normal_dist_converted = normal_dist
     param_with_errors = [value + factor * error if apply else value for apply, value, error in zip(mask,
                                                                                                    nominal_values,
-                                                                                                   normal_dist_converted)]
+                                                                                                   errors)]
     return param_with_errors
 
 
@@ -349,3 +364,130 @@ def reject_outliers_by_mahalanobis_dist(dataframe, threshold):
             df_filtered = pd.concat([df_filtered, df])
     df_filtered.reset_index()
     return df_filtered
+
+
+def get_joint_tfs_pose_err_plot(q_vec, params):
+    """
+    modified version for the one plot function only
+    """
+    joint_tfs = []  # initialize list
+    q_vec = q_vec.flatten()
+    q_vec = np.append(q_vec, np.zeros(RobotDescription.dhparams["num_cam_extrinsic"]))  # pad q vector with zero for non actuated last transform
+    for (i, q) in enumerate(q_vec):  # iterate over joint values
+        theta = params["theta"][i]
+        d = params["d"][i]
+        r = params["r"][i]
+        alpha = params["alpha"][i]
+        joint_tfs.append({'mat': RobotDescription.get_T_i_forward(q, theta, d, r, alpha),
+                          'from_frame': str(i+1), 'to_frame': str(i)})
+
+    joint_tfs.append({'mat': RobotDescription.T_W0, 'from_frame': '0', 'to_frame': 'world'})
+    return joint_tfs
+
+
+def plot_pose_errors_dist(nominal_parameters, error_parameters, estd_parameters, df_observations):
+    # len of robot
+    last_frame = RobotDescription.dhparams['num_cam_extrinsic'] + RobotDescription.dhparams['num_joints']
+
+    # extract all qs from observations
+    qs = np.vstack(df_observations['q'].to_numpy())
+    qs_unique = np.unique(qs, axis=0)
+
+    # create dataframe to store data
+    data = pd.DataFrame()
+    data['q'] = list(qs_unique)
+
+    list_nom_positions = []
+    list_err_positions = []
+    list_est_positions = []
+
+    for q in data['q']:
+        # get camera poses nominal
+        joint_tfs = get_joint_tfs_pose_err_plot(q, nominal_parameters)
+        tm = TransformManager()
+        for tf in joint_tfs:
+            from_frame, to_frame, A2B = tf['from_frame'], tf['to_frame'], tf['mat']
+            tm.add_transform(from_frame, to_frame, A2B)
+        list_nom_positions.append(np.array(tm.get_transform(str(last_frame), 'world'))[0:3, 3])
+
+        # get camera poses error
+        joint_tfs = get_joint_tfs_pose_err_plot(q, error_parameters)
+        tm = TransformManager()
+        for tf in joint_tfs:
+            from_frame, to_frame, A2B = tf['from_frame'], tf['to_frame'], tf['mat']
+            tm.add_transform(from_frame, to_frame, A2B)
+        list_err_positions.append(np.array(tm.get_transform(str(last_frame), 'world'))[0:3, 3])
+
+        # get camera poses identified
+        joint_tfs = get_joint_tfs_pose_err_plot(q, estd_parameters)
+        tm = TransformManager()
+        for tf in joint_tfs:
+            from_frame, to_frame, A2B = tf['from_frame'], tf['to_frame'], tf['mat']
+            tm.add_transform(from_frame, to_frame, A2B)
+        list_est_positions.append(np.array(tm.get_transform(str(last_frame), 'world'))[0:3, 3])
+
+    data['nominal'] = list_nom_positions
+    data['error'] = list_err_positions
+    data['estd'] = list_est_positions
+
+    # calculate the distances
+    data['dist_err'] = data['nominal'] - data['error']
+    data['dist_err'] = data['dist_err'].apply(np.linalg.norm)
+    # print(data['dist_err'][0])
+
+    data['dist_est'] = data['nominal'] - data['estd']
+    data['dist_est'] = data['dist_est'].apply(np.linalg.norm)
+    # print(data['dist_est'][0])
+
+    data['index'] = data.index
+
+    data['dist_err_mm'], data['dist_est_mm'] = data['dist_err'] * 1000, data['dist_est'] * 1000
+
+    fig, ax = plt.subplots(1, 1, figsize=(2.5, 2.5))
+    data.plot.scatter(ax=ax, x='index', y='dist_err_mm', color=acin_colors['red'])
+    data.plot.scatter(ax=ax, x='index', y='dist_est_mm', color=acin_colors['blue'])
+    ax.set_xlabel('Number of configuration')
+    ax.set_ylabel('Distance Error [mm]')
+
+    ax.legend(['uncalibrated', 'calibrated'], bbox_to_anchor=(0.5, 1.0), loc='lower center')
+
+    return fig
+
+
+def autolabel_plot_pose_errors_bar(rects, ax):
+    """Attach a text label above each bar in *rects*, displaying its height."""
+    for rect in rects:
+        height = rect.get_height()
+        ax.annotate('{:.1f}'.format(height),
+                    xy=(rect.get_x() + rect.get_width() / 2, height),
+                    xytext=(0, 3),  # 3 points vertical offset
+                    textcoords="offset points",
+                    ha='center', va='bottom')
+
+
+def plot_pose_errors_bar(labels, xlabel, ylabel, err_max, err_mean):
+    err_max, err_mean = np.array(err_max) * 1000, np.array(err_mean) * 1000
+    x = np.arange(len(labels))  # the label locations
+    width = 0.35  # the width of the bars
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+    rects1 = ax.bar(x - width / 2, err_max, width, label='max', color=acin_colors['blue'])
+    rects2 = ax.bar(x + width / 2, err_mean, width, label='mean', color=acin_colors['green'])
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+
+    ymin, ymax = ax.get_ylim()
+    ax.set_ylim(ymin, ymax * 1.1)
+    ax.legend()
+
+    # autolabel_plot_pose_errors_bar(rects1, ax)
+    # autolabel_plot_pose_errors_bar(rects2, ax)
+
+    fig.tight_layout()
+
+    return fig

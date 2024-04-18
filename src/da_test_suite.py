@@ -21,12 +21,14 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     nominal_parameters = {'theta': theta_nom, 'd': d_nom, 'r': r_nom, 'alpha': alpha_nom}
 
     # apply the errors - model the real robot
-    theta_error = apply_error_to_params(theta_nom, parameter_id_masks['theta'], factor, 'deg_to_rad')
-    d_error = apply_error_to_params(d_nom, parameter_id_masks['d'], factor, 'm_to_mm')
-    r_error = apply_error_to_params(r_nom, parameter_id_masks['r'], factor, 'm_to_mm')
-    alpha_error = apply_error_to_params(alpha_nom, parameter_id_masks['alpha'], factor, 'deg_to_rad')
+    errors = get_errors(len(theta_nom))
+    theta_error = apply_error_to_params(theta_nom, parameter_id_masks['theta'], errors, factor)
+    d_error = apply_error_to_params(d_nom, parameter_id_masks['d'], errors, factor)
+    r_error = apply_error_to_params(r_nom, parameter_id_masks['r'], errors, factor)
+    alpha_error = apply_error_to_params(alpha_nom, parameter_id_masks['alpha'], errors, factor)
     error_parameters = {'theta': theta_error, 'd': d_error, 'r': r_error, 'alpha': alpha_error}
 
+    control_error_parameters = diff_dictionaries(error_parameters, nominal_parameters)
     ##########################################################################
     # 2) Import and filter observations to be used, generate pairs
     ##########################################################################
@@ -52,8 +54,8 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     ##########################################################################
     current_estimate = error_parameters
     current_error_evolution = []
-    estimated_params_evolution = []
-    estimated_errors_evolution = []
+    estimated_params_evolution = [error_parameters]
+    estimated_errors_evolution = [control_error_parameters]
     rms_residuals_evolution = []
     print('begin iterative solving process')
     rms_residuals = 1e6  # init with large number
@@ -71,6 +73,7 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
         param_names = additional_info['param_names']
         reduced_param_names = additional_info['param_names_reduced']
         rms_residuals = np.mean(np.power(residuals_i, 2))**0.5
+        max_residuals = np.max(np.abs(residuals_i))
         rms_residuals_evolution.append(rms_residuals)
         itervar = itervar + 1
         current_error_evolution.append(current_errors)
@@ -87,19 +90,24 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     print('done')
 
     ############################################
-    titles = {'suptitle': 'Evolution of current estimate',
+    titles = {'suptitle': '',  # 'Evolution of current estimate',
               'theta': r'$\theta$ [°]',
               'd': r'd [mm]',
               'r': r'r [mm]',
               'alpha': r'$\alpha$ [°]'}
     fig_param_evolution = plot_evolution(titles, estimated_params_evolution)
     ############################################
-    titles = {'suptitle': 'Evolution of residual error',
+    titles = {'suptitle': '',  # 'Evolution of residual error',
               'theta': r'$\Delta$$\theta$ [°]',
               'd': r'$\Delta$d [mm]',
               'r': r'$\Delta$r [mm]',
               'alpha': r'$\Delta$$\alpha$ [°]'}
     fig_error_evolution = plot_evolution(titles, estimated_errors_evolution)
+    ############################################
+    fig_p_errdists = plot_pose_errors_dist(nominal_parameters,
+                                           error_parameters,
+                                           current_estimate,
+                                           df_observations)
     ############################################
 
     simulated_errors = diff_dictionaries(nominal_parameters, error_parameters)
@@ -109,11 +117,13 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     exp_handler = ExperimentDataHandler()
     exp_handler.add_figure(fig_error_evolution, 'error_evolution')
     exp_handler.add_figure(fig_param_evolution, 'param_evolution')
+    exp_handler.add_figure(fig_p_errdists, f'pose_error_dists_{factor}')
     exp_handler.add_note(f"nominal params: \n{RobotDescription.dhparams}\n\n" +
                          f"filtering: {num_obs_filtered}/{num_obs_unfiltered} used\n\n" +
                          f"filter comment: {filter_comment}\n\n "
                          f"parameter identification masks\n{parameter_id_masks}\n\n" +
                          f"error factor\n{factor}\n\n" +
+                         f"error set\n{errors}\n\n" +
                          f"parameters with errors: \n{error_parameters}\n\n" +
                          f"observations file: \n {observations_file_str_dict[observations_file_select]}\n\n" +
                          f"number of iterations: \n {itervar}/{num_iterations} \n\n " +
@@ -124,10 +134,15 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
                          f"jacobian quality\n{jac_quality}\n\n",
                          'info')
     exp_handler.add_note(f"norm residuals evolution \n{rms_residuals_evolution}\n\n", 'norm_convergence')
+    exp_handler.add_note(f"{additional_info['jac_quality']['qr_diag_r_reduced_jacobian']}", "qr_diag")
     exp_handler.add_note(f"{np.sqrt(df_result['identification_accuracy'].pow(2).mean())}", 'residual_error_RMS')
     exp_handler.add_df(df_result, 'data')
     # exp_handler.add_marker_location(list_marker_locations[-1], 'last_marker_locations')
     exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp')
+
+    ret = {'max_residuals': max_residuals, 'rms_residuals': rms_residuals}
+
+    return ret
 
 ########################### SETTINGS ###########################
 # define which parameters are to be identified
@@ -157,14 +172,28 @@ num_iterations = 10
 mal_threshold = 20
 
 # tolerance to break loop
-residual_norm_tolerance = 1e-3
+residual_norm_tolerance = 1e-6
 #################################################################
 # for observations_file_select in [1, 4, 9, 10]:
 #     for factor in [0, 10, 20, 30, 40, 50, 60, 70]:
 #         do_experiment(parameter_id_masks, factor, observations_file_select,
 #                       observations_file_str_dict, num_iterations, residual_norm_tolerance)
 
+bar_plot_data_max_mean = {'factor': [], 'mean': [], 'max': []}
+
 for observations_file_select in [0]:
-    for factor in [30]:
-        do_experiment(parameter_id_masks, factor, observations_file_select,
-                      observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)
+    for factor in [1, 0.5, 0.1]:
+        ret = do_experiment(parameter_id_masks, factor, observations_file_select,
+                            observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)
+        bar_plot_data_max_mean['factor'].append(factor)
+        bar_plot_data_max_mean['mean'].append(ret['rms_residuals'])
+        bar_plot_data_max_mean['max'].append(ret['max_residuals'])
+
+fig_bar = plot_pose_errors_bar(bar_plot_data_max_mean['factor'],
+                               "Added Noise Factor",
+                               "Residuals",
+                               bar_plot_data_max_mean['max'],
+                               bar_plot_data_max_mean['mean'])
+exp_handler = ExperimentDataHandler()
+exp_handler.add_figure(fig_bar, 'bar_plots')
+exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp')

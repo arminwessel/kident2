@@ -4,10 +4,12 @@ import datetime
 import pickle
 from da_test_suite_functions import latex_to_pdf
 class ExperimentDataHandler:
-    figures = {}
-    dataframes = {}
-    notes = {}
-    marker_locations = {}
+
+    def __init__(self):
+        self.figures = {}
+        self.dataframes = {}
+        self.notes = {}
+        self.marker_locations = {}
 
     def add_figure(self, figure, name):
         self.figures[name] = figure
