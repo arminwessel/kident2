@@ -237,12 +237,13 @@ class RobotDescription:
         return list_obs
 
     @staticmethod
-    def get_joint_tfs(q_vec, params=None):
+    def get_joint_tfs(q_vec):
         """
         from_frame : Name of the frame for which the transformation is added in the to_frame coordinate system
         to_frame :  Name of the frame in which the transformation is defined
         """
         joint_tfs = []  # initialize list
+        params = RobotDescription.dhparams
         q_vec = q_vec.flatten()
         q_vec = np.append(q_vec, np.zeros(RobotDescription.dhparams["num_cam_extrinsic"]))  # pad q vector with zero for non actuated last transform
         for (i, q) in enumerate(q_vec):  # iterate over joint values
