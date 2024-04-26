@@ -7,7 +7,7 @@ from exp_data_handler import *
 from robot import RobotDescription
 
 
-def do_experiment(parameter_id_masks, factor, observations_file_select, observations_file_str_dict,
+def do_experiment(parameter_id_masks, errors, factor, observations_file_select, observations_file_str_dict,
                   num_iterations, residual_norm_tolerance,  mal_threshold):
 
     ##########################################################################
@@ -21,7 +21,6 @@ def do_experiment(parameter_id_masks, factor, observations_file_select, observat
     nominal_parameters = {'theta': theta_nom, 'd': d_nom, 'r': r_nom, 'alpha': alpha_nom}
 
     # apply the errors - model the real robot
-    errors = get_errors(len(theta_nom))
     theta_error = apply_error_to_params(theta_nom, parameter_id_masks['theta'], errors, factor)
     d_error = apply_error_to_params(d_nom, parameter_id_masks['d'], errors, factor)
     r_error = apply_error_to_params(r_nom, parameter_id_masks['r'], errors, factor)
@@ -166,7 +165,7 @@ observations_file_str_dict = {0:  r'observation_files/ground_truth_dataset.p',
 
 
 # set maximal number of iterations
-num_iterations = 10
+num_iterations = 20
 
 # set filter threshold
 mal_threshold = 20
@@ -180,10 +179,11 @@ residual_norm_tolerance = 1e-6
 #                       observations_file_str_dict, num_iterations, residual_norm_tolerance)
 
 bar_plot_data_max_mean = {'factor': [], 'mean': [], 'max': []}
+errors = get_errors(len(parameter_id_masks['alpha']))
 
 for observations_file_select in [0]:
     for factor in [1, 0.5, 0.1]:
-        ret = do_experiment(parameter_id_masks, factor, observations_file_select,
+        ret = do_experiment(parameter_id_masks, errors, factor, observations_file_select,
                             observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)
         bar_plot_data_max_mean['factor'].append(factor)
         bar_plot_data_max_mean['mean'].append(ret['rms_residuals'])
