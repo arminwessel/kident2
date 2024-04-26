@@ -248,8 +248,8 @@ class IiwaHandler:
 # Node
 if __name__ == "__main__":
     rospy.init_node('iiwa_handler')
-    # handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/traj.csv")
-    handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/single_marker.csv")
+    handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/traj.csv")
+    # handler = IiwaHandler(traj_file="/home/armin/catkin_ws/src/kident2/src/single_marker.csv")
     rospy.on_shutdown(handler.release_udp_socket)
 
     rate = rospy.Rate(10)

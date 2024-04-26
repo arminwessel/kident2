@@ -159,6 +159,8 @@ parameter_id_masks['alpha'] =   [False, True, True, True, True, True, True, True
 #observations_file_select = 21 # set in loop
 
 observations_file_str_dict = {0:  r'observation_files/ground_truth_dataset.p',
+                              1:  r'observation_files/obs_exp_26_04_001_2024-04-26-11-19-23_20240426-112528.p',
+                              3:  r'observation_files/obs_exp_26_04_002_2024-04-26-12-06-53_20240426-123809.p',
                               20: r'observation_files/obs_single_marker_2023-11-01-11-12-21_20240109-060457.p',
                               21: r'observation_files/observations_simulated_20240411_144805.p'
                               }
@@ -181,19 +183,19 @@ residual_norm_tolerance = 1e-6
 bar_plot_data_max_mean = {'factor': [], 'mean': [], 'max': []}
 errors = get_errors(len(parameter_id_masks['alpha']))
 
-for observations_file_select in [0]:
-    for factor in [1, 0.5, 0.1]:
+for observations_file_select in [3]:
+    for factor in [1]:
         ret = do_experiment(parameter_id_masks, errors, factor, observations_file_select,
                             observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)
-        bar_plot_data_max_mean['factor'].append(factor)
-        bar_plot_data_max_mean['mean'].append(ret['rms_residuals'])
-        bar_plot_data_max_mean['max'].append(ret['max_residuals'])
-
-fig_bar = plot_pose_errors_bar(bar_plot_data_max_mean['factor'],
-                               "Added Noise Factor",
-                               "Residuals",
-                               bar_plot_data_max_mean['max'],
-                               bar_plot_data_max_mean['mean'])
-exp_handler = ExperimentDataHandler()
-exp_handler.add_figure(fig_bar, 'bar_plots')
-exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp')
+#         bar_plot_data_max_mean['factor'].append(factor)
+#         bar_plot_data_max_mean['mean'].append(ret['rms_residuals'])
+#         bar_plot_data_max_mean['max'].append(ret['max_residuals'])
+#
+# fig_bar = plot_pose_errors_bar(bar_plot_data_max_mean['factor'],
+#                                "Added Noise Factor",
+#                                "Residuals",
+#                                bar_plot_data_max_mean['max'],
+#                                bar_plot_data_max_mean['mean'])
+# exp_handler = ExperimentDataHandler()
+# exp_handler.add_figure(fig_bar, 'bar_plots')
+# exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp')

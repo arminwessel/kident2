@@ -15,7 +15,8 @@ import pandas as pd
 
 ###############  SETUP  #####################
 # input_bag_file = '/media/armin/Armin/2007_gazebo_iiwa_stopping.bag'
-input_bag_file = '/home/armin/single_marker_2023-11-01-11-12-21.bag'
+# input_bag_file = '/home/armin/single_marker_2023-11-01-11-12-21.bag'
+input_bag_file = '/home/armin/Desktop/rosbags/exp_26_04_002_2024-04-26-12-06-53.bag'
 image_topic = 'r1/camera/image'
 q_topic = 'r1/joint_states'
 #############################################

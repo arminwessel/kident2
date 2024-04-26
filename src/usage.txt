@@ -14,6 +14,8 @@ rosbag record -b 1024 --duration=30m -o "/media/armin/789ECB199ECACF36/Documents
 
 rosbag record compress -b 1024 --duration=5m -o "/home/armin/single_marker.bag" r1/camera/camera_info r1/camera/image iiwa_q gazebo/performance_metrics clock r1/joint_states tf
 
+rosbag record -b 1024 --duration=5m -o "/home/armin/Desktop/rosbags/exp_26_04_001.bag" r1/camera/camera_info r1/camera/image iiwa_q gazebo/performance_metrics clock r1/joint_states tf
+
 rosrun tf static_transform_publisher 1.2045 1.5104 0.5176 0.0000 1.3090 0.8976 r1/world marker_4 100
 rosrun tf static_transform_publisher 0.9194 1.1529 1.3512 0.0000 0.8290 0.8976 r1/world marker_5 100
 rosrun tf static_transform_publisher 0.4265 0.5348 1.8794 0.0000 0.3491 0.8976 r1/world marker_6 100

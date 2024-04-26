@@ -1,4 +1,6 @@
 import pickle
+
+import cv2.aruco_Board
 import numpy as np
 import scipy.linalg
 import sympy
