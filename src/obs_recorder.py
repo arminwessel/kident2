@@ -22,7 +22,7 @@ q_topic = 'r1/joint_states'
 #############################################
 
 
-def process_bag_file(input_bag_file, image_topic, q_topic):
+def process_bag_file(input_bag_file, image_topic, q_topic, marker_type):
     print('Beginning Processing')
     input_bag = rosbag.Bag(input_bag_file, 'r')  # input file
 
@@ -46,7 +46,7 @@ def process_bag_file(input_bag_file, image_topic, q_topic):
         cv_img = bridge.imgmsg_to_cv2(msg, "bgr8")
         interp_distance = utils.get_interp_distance(q_timestamps, cv_img_timestamp)  # check how far this timestamp is from the closest timestamp for q
         q_interp = utils.interpolate_vector(cv_img_timestamp, q_timestamps, np.array(q_values).T)  # get the interpolated value
-        list_obs_frame = RobotDescription.observe(cv_img, q_interp, cv_img_timestamp)  # returns list of obs dictionaries
+        list_obs_frame = RobotDescription.observe2(cv_img, q_interp, marker_type, cv_img_timestamp)  # returns list of obs dictionaries
         _ = [obs.update(interp_dist=interp_distance) for obs in list_obs_frame]  # add interp distance to each dict
         observations.extend(list_obs_frame)  # add all entries of small list to big list
 
@@ -55,7 +55,8 @@ def process_bag_file(input_bag_file, image_topic, q_topic):
     return df
 
 
-recorded_observations = process_bag_file(input_bag_file, image_topic, q_topic)
+marker_type = 'aruco'
+recorded_observations = process_bag_file(input_bag_file, image_topic, q_topic, marker_type)
 timestr = time.strftime("%Y%m%d-%H%M%S")
 observations_file_str = "obs_{}_{}.p".format(os.path.splitext(os.path.basename(input_bag_file))[0], timestr)
 
