@@ -40,9 +40,9 @@ class RobotDescription:
                                                     0.0, 0.0, 1.0]).reshape(3, 3),
                      'camera_distortion': np.zeros(5)}
 
-    aruco_params = {'arucoDict': cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_1000),
+    aruco_params = {'arucoDict': cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_1000),
                     'aruco_length': 0.4,
-                    'detector_params': cv2.aruco.DetectorParameters_create()}
+                    'detector_params': cv2.aruco.DetectorParameters()}
 
 
 
@@ -262,9 +262,7 @@ class RobotDescription:
         est_poses = []
         (corners, marker_ids, rejected) = cv2.aruco.detectMarkers(img,
                                                                   RobotDescription.aruco_params['arucoDict'],
-                                                                  parameters=RobotDescription.aruco_params['detector_params'],
-                                                                  cameraMatrix=RobotDescription.camera_params['camera_matrix'],
-                                                                  distCoeff=RobotDescription.camera_params['camera_distortion'])
+                                                                  parameters=RobotDescription.aruco_params['detector_params'])
 
         if marker_ids is None:
             return est_poses  # return empty list if no marker found
