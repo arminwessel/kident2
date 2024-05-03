@@ -56,6 +56,7 @@ def do_experiment(parameter_id_masks, errors, factor, observations_file_select, 
     estimated_params_evolution = [error_parameters]
     estimated_errors_evolution = [control_error_parameters]
     rms_residuals_evolution = []
+    rms_remaining_error_evoluion = []
     print('begin iterative solving process')
     rms_residuals = 1e6  # init with large number
     itervar = 0
@@ -80,6 +81,8 @@ def do_experiment(parameter_id_masks, errors, factor, observations_file_select, 
         estimated_errors = diff_dictionaries(current_estimate, nominal_parameters)
         estimated_errors_evolution.append(estimated_errors)
         remaining_error = np.array([estimated_errors[key] for key in estimated_errors]).flatten()
+        rms_remaining_error = np.mean(np.power(remaining_error, 2))**0.5
+        rms_remaining_error_evoluion.append(rms_remaining_error)
         if rms_residuals < residual_norm_tolerance:
             print(f'\trms residuals {rms_residuals} < tolerance {residual_norm_tolerance}')
             break
@@ -133,6 +136,7 @@ def do_experiment(parameter_id_masks, errors, factor, observations_file_select, 
                          f"jacobian quality\n{jac_quality}\n\n",
                          'info')
     exp_handler.add_note(f"norm residuals evolution \n{rms_residuals_evolution}\n\n", 'norm_convergence')
+    exp_handler.add_note(f"remaining mean error evolution \n{rms_remaining_error_evoluion}\n\n", 'remaining_error_convergence')
     exp_handler.add_note(f"{additional_info['jac_quality']['qr_diag_r_reduced_jacobian']}", "qr_diag")
     exp_handler.add_note(f"{np.sqrt(df_result['identification_accuracy'].pow(2).mean())}", 'residual_error_RMS')
     exp_handler.add_df(df_result, 'data')
