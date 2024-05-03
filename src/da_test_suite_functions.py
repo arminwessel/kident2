@@ -1,6 +1,4 @@
 import pickle
-
-import cv2.aruco_Board
 import numpy as np
 import scipy.linalg
 import sympy
@@ -388,6 +386,30 @@ def get_joint_tfs_pose_err_plot(q_vec, params):
 
 
 def plot_pose_errors_dist(nominal_parameters, error_parameters, estd_parameters, df_observations):
+
+    data_estimated = get_pose_errors_dist(nominal_parameters, estd_parameters, df_observations)
+    data_error = get_pose_errors_dist(nominal_parameters, error_parameters, df_observations)
+
+    data = pd.DataFrame()
+    data['dist_err_mm'] = data_error['dist_mm']
+    data['dist_est_mm'] = data_estimated['dist_mm']
+    data['index_err'] = data_error['index']
+    data['index_est'] = data_estimated['index']
+
+    fig, ax = plt.subplots(1, 1, figsize=(2.5, 2.5))
+    data.plot.scatter(ax=ax, x='index_err', y='dist_err_mm', color=acin_colors['red'])
+    data.plot.scatter(ax=ax, x='index_est', y='dist_est_mm', color=acin_colors['blue'])
+    ax.set_xlabel('Number of configuration')
+    ax.set_ylabel('Distance Error [mm]')
+
+    ax.legend(['uncalibrated', 'calibrated'], bbox_to_anchor=(0.5, 1.0), loc='lower center')
+
+    return fig
+
+##############################################################
+
+
+def get_pose_errors_dist(nominal_parameters, test_parameters, df_observations):
     # len of robot
     last_frame = RobotDescription.dhparams['num_cam_extrinsic'] + RobotDescription.dhparams['num_joints']
 
@@ -400,8 +422,7 @@ def plot_pose_errors_dist(nominal_parameters, error_parameters, estd_parameters,
     data['q'] = list(qs_unique)
 
     list_nom_positions = []
-    list_err_positions = []
-    list_est_positions = []
+    list_test_positions = []
 
     for q in data['q']:
         # get camera poses nominal
@@ -412,50 +433,28 @@ def plot_pose_errors_dist(nominal_parameters, error_parameters, estd_parameters,
             tm.add_transform(from_frame, to_frame, A2B)
         list_nom_positions.append(np.array(tm.get_transform(str(last_frame), 'world'))[0:3, 3])
 
-        # get camera poses error
-        joint_tfs = get_joint_tfs_pose_err_plot(q, error_parameters)
+        # get camera poses test
+        joint_tfs = get_joint_tfs_pose_err_plot(q, test_parameters)
         tm = TransformManager()
         for tf in joint_tfs:
             from_frame, to_frame, A2B = tf['from_frame'], tf['to_frame'], tf['mat']
             tm.add_transform(from_frame, to_frame, A2B)
-        list_err_positions.append(np.array(tm.get_transform(str(last_frame), 'world'))[0:3, 3])
-
-        # get camera poses identified
-        joint_tfs = get_joint_tfs_pose_err_plot(q, estd_parameters)
-        tm = TransformManager()
-        for tf in joint_tfs:
-            from_frame, to_frame, A2B = tf['from_frame'], tf['to_frame'], tf['mat']
-            tm.add_transform(from_frame, to_frame, A2B)
-        list_est_positions.append(np.array(tm.get_transform(str(last_frame), 'world'))[0:3, 3])
+        list_test_positions.append(np.array(tm.get_transform(str(last_frame), 'world'))[0:3, 3])
 
     data['nominal'] = list_nom_positions
-    data['error'] = list_err_positions
-    data['estd'] = list_est_positions
+    data['test'] = list_test_positions
 
     # calculate the distances
-    data['dist_err'] = data['nominal'] - data['error']
-    data['dist_err'] = data['dist_err'].apply(np.linalg.norm)
-    # print(data['dist_err'][0])
-
-    data['dist_est'] = data['nominal'] - data['estd']
-    data['dist_est'] = data['dist_est'].apply(np.linalg.norm)
-    # print(data['dist_est'][0])
+    data['dist'] = data['nominal'] - data['test']
+    data['dist'] = data['dist'].apply(np.linalg.norm)
 
     data['index'] = data.index
 
-    data['dist_err_mm'], data['dist_est_mm'] = data['dist_err'] * 1000, data['dist_est'] * 1000
+    data['dist_mm'] = data['dist'] * 1000
 
-    fig, ax = plt.subplots(1, 1, figsize=(2.5, 2.5))
-    data.plot.scatter(ax=ax, x='index', y='dist_err_mm', color=acin_colors['red'])
-    data.plot.scatter(ax=ax, x='index', y='dist_est_mm', color=acin_colors['blue'])
-    ax.set_xlabel('Number of configuration')
-    ax.set_ylabel('Distance Error [mm]')
+    return data
 
-    ax.legend(['uncalibrated', 'calibrated'], bbox_to_anchor=(0.5, 1.0), loc='lower center')
-
-    return fig
-
-
+##############################################################
 def autolabel_plot_pose_errors_bar(rects, ax):
     """Attach a text label above each bar in *rects*, displaying its height."""
     for rect in rects:
@@ -489,6 +488,30 @@ def plot_pose_errors_bar(labels, xlabel, ylabel, err_max, err_mean):
 
     # autolabel_plot_pose_errors_bar(rects1, ax)
     # autolabel_plot_pose_errors_bar(rects2, ax)
+
+    fig.tight_layout()
+
+    return fig
+
+
+def plot_bar(labels, xlabel, ylabel, values):
+    values = np.array(values) * 1000
+    x = np.arange(len(labels))  # the label locations
+    width = 0.35  # the width of the bars
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+    rects1 = ax.bar(x - width / 2, values, width, color=acin_colors['blue'])
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+
+    ymin, ymax = ax.get_ylim()
+    ax.set_ylim(ymin, ymax * 1.1)
+    ax.legend()
 
     fig.tight_layout()
 

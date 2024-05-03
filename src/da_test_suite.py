@@ -115,6 +115,8 @@ def do_experiment(parameter_id_masks, errors, factor, observations_file_select, 
     simulated_errors = diff_dictionaries(nominal_parameters, error_parameters)
     identified_errors = diff_dictionaries(current_estimate, error_parameters)
     df_result = result_to_df(simulated_errors, identified_errors)
+    distances = get_pose_errors_dist(nominal_parameters, current_estimate, df_observations)
+    mean_distance = distances['dist'].mean()
 
     exp_handler = ExperimentDataHandler()
     exp_handler.add_figure(fig_error_evolution, 'error_evolution')
@@ -143,7 +145,7 @@ def do_experiment(parameter_id_masks, errors, factor, observations_file_select, 
     # exp_handler.add_marker_location(list_marker_locations[-1], 'last_marker_locations')
     exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp')
 
-    ret = {'max_residuals': max_residuals, 'rms_residuals': rms_residuals}
+    ret = {'max_residuals': max_residuals, 'rms_residuals': rms_residuals, 'mean_distance': mean_distance}
 
     return ret
 
@@ -166,12 +168,33 @@ observations_file_str_dict = {0:  r'observation_files/ground_truth_dataset.p',
                               1:  r'observation_files/obs_exp_26_04_001_2024-04-26-11-19-23_20240426-112528.p',
                               3:  r'observation_files/obs_exp_26_04_002_2024-04-26-12-06-53_20240426-123809.p',
                               20: r'observation_files/obs_single_marker_2023-11-01-11-12-21_20240109-060457.p',
-                              21: r'observation_files/observations_simulated_20240411_144805.p'
+                              21: r'observation_files/observations_simulated_20240411_144805.p',
+                              30: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00000.p',
+                              31: r'observation_files/meas_err/observations_simulated_errors__r_0.00010__t_0.00000.p',
+                              32: r'observation_files/meas_err/observations_simulated_errors__r_0.00020__t_0.00000.p',
+                              33: r'observation_files/meas_err/observations_simulated_errors__r_0.00030__t_0.00000.p',
+                              34: r'observation_files/meas_err/observations_simulated_errors__r_0.00040__t_0.00000.p',
+                              35: r'observation_files/meas_err/observations_simulated_errors__r_0.00050__t_0.00000.p',
+                              36: r'observation_files/meas_err/observations_simulated_errors__r_0.00060__t_0.00000.p',
+                              37: r'observation_files/meas_err/observations_simulated_errors__r_0.00070__t_0.00000.p',
+                              38: r'observation_files/meas_err/observations_simulated_errors__r_0.00080__t_0.00000.p',
+                              39: r'observation_files/meas_err/observations_simulated_errors__r_0.00090__t_0.00000.p',
+                              60: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00000.p',
+                              61: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00010.p',
+                              62: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00020.p',
+                              63: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00030.p',
+                              64: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00040.p',
+                              65: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00050.p',
+                              66: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00060.p',
+                              67: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00070.p',
+                              68: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00080.p',
+                              69: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00090.p'
                               }
 
 
+
 # set maximal number of iterations
-num_iterations = 20
+num_iterations = 3
 
 # set filter threshold
 mal_threshold = 20
@@ -184,22 +207,37 @@ residual_norm_tolerance = 1e-6
 #         do_experiment(parameter_id_masks, factor, observations_file_select,
 #                       observations_file_str_dict, num_iterations, residual_norm_tolerance)
 
-bar_plot_data_max_mean = {'factor': [], 'mean': [], 'max': []}
+bar_plot_data_max_mean = {'magnitude': [], 'mean_distance': []}
 errors = get_errors(len(parameter_id_masks['alpha']))
 
-for observations_file_select in [3]:
-    for factor in [1]:
+for observations_file_select in [31, 32, 33, 34, 35, 36, 37, 38, 39]:
+    for factor in [0]:
         ret = do_experiment(parameter_id_masks, errors, factor, observations_file_select,
                             observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)
-#         bar_plot_data_max_mean['factor'].append(factor)
-#         bar_plot_data_max_mean['mean'].append(ret['rms_residuals'])
-#         bar_plot_data_max_mean['max'].append(ret['max_residuals'])
-#
-# fig_bar = plot_pose_errors_bar(bar_plot_data_max_mean['factor'],
-#                                "Added Noise Factor",
-#                                "Residuals",
-#                                bar_plot_data_max_mean['max'],
-#                                bar_plot_data_max_mean['mean'])
-# exp_handler = ExperimentDataHandler()
-# exp_handler.add_figure(fig_bar, 'bar_plots')
-# exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp')
+        bar_plot_data_max_mean['magnitude'].append(observations_file_select % 10)
+        bar_plot_data_max_mean['mean_distance'].append(ret['mean_distance'])
+
+fig_bar = plot_bar(bar_plot_data_max_mean['magnitude'],
+                               "Dataset",
+                               "Mean Distance",
+                               bar_plot_data_max_mean['mean_distance'])
+exp_handler = ExperimentDataHandler()
+exp_handler.add_figure(fig_bar, 'bar_plots')
+exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp/bar')
+
+
+bar_plot_data_max_mean = {'magnitude': [], 'mean_distance': []}
+for observations_file_select in [61, 62, 63, 64, 65, 66, 67, 68, 69]:
+    for factor in [0]:
+        ret = do_experiment(parameter_id_masks, errors, factor, observations_file_select,
+                            observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)
+        bar_plot_data_max_mean['magnitude'].append(observations_file_select % 10)
+        bar_plot_data_max_mean['mean_distance'].append(ret['mean_distance'])
+
+fig_bar = plot_bar(bar_plot_data_max_mean['magnitude'],
+                               "Dataset",
+                               "Mean Distance",
+                               bar_plot_data_max_mean['mean_distance'])
+exp_handler = ExperimentDataHandler()
+exp_handler.add_figure(fig_bar, 'bar_plots')
+exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp/bar')
