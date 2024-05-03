@@ -40,12 +40,30 @@ class RobotDescription:
                                                     0.0, 0.0, 1.0]).reshape(3, 3),
                      'camera_distortion': np.zeros(5)}
 
-    aruco_params = {'arucoDict': cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_1000),
+    aruco_params = {'arucoDict': cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_1000),
                     'aruco_length': 0.4,
-                    'detector_params': cv2.aruco.DetectorParameters_create()}
+                    'detector_params': cv2.aruco.DetectorParameters()}
+
+    charuco_params = {'arucoDict': cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250),
+                      'detector_params': cv2.aruco.CharucoParameters(),
+                      'refine_params': cv2.aruco.RefineParameters(),
+                      'squares_verically': 7,
+                      'squares_horizontally': 5,
+                      'square_length': 0.03,
+                      'marker_length': 0.015}
 
 
 
+    def __init__(self):
+        board_shape = (self.charuco_params['squares_verically'], self.charuco_params['squares_verically'])
+        self.charuco_params['board'] = cv2.aruco.CharucoBoard(board_shape,
+                                                              self.charuco_params['square_length'],
+                                                              self.charuco_params['marker_length'],
+                                                              self.charuco_params['arucoDict'])
+        self.charuco_params['chdetector'] = cv2.aruco.CharucoDetector(self.charuco_params['board'],
+                                                                      self.charuco_params['detector_params'],
+                                                                      self.aruco_params['detector_params'],
+                                                                      self.charuco_params['refine_params'])
     @staticmethod
     def get_linear_model(observation_pairs, theta, d, r, alpha, include_rot=False):
         """
@@ -223,9 +241,13 @@ class RobotDescription:
 
     @staticmethod
     def observe(img, q, time=0):
+        return RobotDescription.observe2(img, q, 'aruco', time)
+
+    @staticmethod
+    def observe2(img, q, marker_type, time=0):
         list_obs = []
-        est_poses = RobotDescription.get_camera_tfs(img)
-        joint_tfs = RobotDescription.get_joint_tfs(q)
+        est_poses = RobotDescription.get_camera_tfs(img, marker_type)
+        #joint_tfs = RobotDescription.get_joint_tfs(q)
         for pose in est_poses:
             obs = {"marker_id": pose['marker_id'],
                    "mat": pose['mat'],
@@ -258,30 +280,44 @@ class RobotDescription:
         return joint_tfs
 
     @staticmethod
-    def get_camera_tfs(img):
+    def get_camera_tfs(img, marker_type='aruco'):
         est_poses = []
-        (corners, marker_ids, rejected) = cv2.aruco.detectMarkers(img,
-                                                                  RobotDescription.aruco_params['arucoDict'],
-                                                                  parameters=RobotDescription.aruco_params['detector_params'],
-                                                                  cameraMatrix=RobotDescription.camera_params['camera_matrix'],
-                                                                  distCoeff=RobotDescription.camera_params['camera_distortion'])
 
-        if marker_ids is None:
-            return est_poses  # return empty list if no marker found
+        if marker_type == 'aruco':
+            (corners, marker_ids, rejected) = cv2.aruco.detectMarkers(img,
+                                                                      RobotDescription.aruco_params['arucoDict'],
+                                                                      parameters=RobotDescription.aruco_params['detector_params'])
 
-        # cv2.aruco.drawDetectedMarkers(img, corners, marker_ids)
+            if marker_ids is None:
+                return est_poses  # return empty list if no marker found
 
-        rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners,
-                                                              RobotDescription.aruco_params['aruco_length'],
-                                                              RobotDescription.camera_params['camera_matrix'],
-                                                              RobotDescription.camera_params['camera_distortion'])
+            # cv2.aruco.drawDetectedMarkers(img, corners, marker_ids)
 
-        # In OpenCV the pose of the marker is with respect to the camera lens frame.
-        # Imagine you are looking through the camera viewfinder,
-        # the camera lens frame's:
-        # x-axis points to the right
-        # y-axis points straight down towards your toes
-        # z-axis points straight ahead away from your eye, out of the camera
+            rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners,
+                                                                  RobotDescription.aruco_params['aruco_length'],
+                                                                  RobotDescription.camera_params['camera_matrix'],
+                                                                  RobotDescription.camera_params['camera_distortion'])
+
+            # In OpenCV the pose of the marker is with respect to the camera lens frame.
+            # Imagine you are looking through the camera viewfinder,
+            # the camera lens frame's:
+            # x-axis points to the right
+            # y-axis points straight down towards your toes
+            # z-axis points straight ahead away from your eye, out of the camera
+        elif marker_type == 'charuco':
+            res = RobotDescription.charuco_params['chdetector'].detectBoard(img)
+            charucoCorners, charucoIds, chmarkerCorners, chmarkerIds = res
+            rvec, tvec = np.zeros(3), np.zeros(3)
+            retval, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(charucoCorners,
+                                                                    charucoIds,
+                                                                    RobotDescription.charuco_params['board'],
+                                                                    RobotDescription.camera_params['camera_matrix'],
+                                                                    RobotDescription.camera_params['camera_distortion'],
+                                                                    rvec, tvec)
+            if retval:
+                marker_ids = [1]
+            else:
+                marker_ids = []
 
         for i, marker_id in enumerate(marker_ids.flatten()):
             T_ = utils.H_rvec_tvec(rvecs[i][0], tvecs[i][0])  # convert to homogeneous matrix
