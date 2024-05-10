@@ -495,12 +495,21 @@ def plot_pose_errors_bar(labels, xlabel, ylabel, err_max, err_mean):
 
 
 def plot_bar(labels, xlabel, ylabel, values):
-    values = np.array(values) * 1000
+    if not isinstance(values[0], list):
+        list_values = [values]
+    else:
+        list_values = values
+
     x = np.arange(len(labels))  # the label locations
     width = 0.35  # the width of the bars
 
     fig, ax = plt.subplots(figsize=(4, 3))
-    rects1 = ax.bar(x - width / 2, values, width, color=acin_colors['blue'])
+
+
+
+    for values in list_values:
+        values = np.array(values)
+        rects1 = ax.bar(x - width / 2, values, width, color=acin_colors['blue'])
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
     ax.set_ylabel(ylabel)
