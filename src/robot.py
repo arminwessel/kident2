@@ -14,14 +14,66 @@ class RobotDescription:
     pip2 = np.pi / 2
     pi = np.pi
 
-    #nominal MDH Parameters of Kuka iiwa 14 with additional camera at ee GAZEBO
-    dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0]),
-               "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0.1]),
-                "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0.3, 0]),
-                "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, 1]),
-                "num_joints": 7,
-                "num_cam_extrinsic": 1}  # camera extrinsic calib
+    robottype = 'TU'
+    #robottype = 'Gazebo'
 
+    if robottype == 'Gazebo':
+        #nominal MDH Parameters of Kuka iiwa 14 with additional camera at ee GAZEBO
+        dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0]),
+                   "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0.1]),
+                    "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0.3, 0]),
+                    "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, 1]),
+                    "num_joints": 7,
+                    "num_cam_extrinsic": 1}  # camera extrinsic calib
+
+        camera_params = {'camera_matrix': np.array([1386.4138492513919, 0.0, 960.5,
+                                                    0.0, 1386.4138492513919, 540.5,
+                                                    0.0, 0.0, 1.0]).reshape(3, 3),
+                         'camera_distortion': np.zeros(5)}
+
+        aruco_params = {'arucoDict': cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_1000),
+                        'aruco_length': 0.4,
+                        'detector_params': cv2.aruco.DetectorParameters()}
+
+        # charuco_params = {'arucoDict': cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250),
+        #                   'detector_params': cv2.aruco.CharucoParameters(),
+        #                   'refine_params': cv2.aruco.RefineParameters(),
+        #                   'squares_verically': 7,
+        #                   'squares_horizontally': 5,
+        #                   'square_length': 0.03,
+        #                   'marker_length': 0.015}
+
+    if robottype == 'TU':
+        #nominal MDH Parameters of Kuka iiwa 14 with additional camera at ee GAZEBO
+        # dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, 1.47, -1.56]),
+        #            "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, -0.02]),
+        #             "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, -0.11, -0.07]),
+        #             "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, -1.25]),
+        #             "num_joints": 7,
+        #             "num_cam_extrinsic": 1}  # camera extrinsic calib
+        dhparams = {"theta_nom": np.array([0.0, 0, 0, 0, 0, 0, -1.48971, -1.52293]),
+                   "d_nom": np.array([0.0, 0, 0, 0, 0, 0, 0, 0.041329]),
+                    "r_nom": np.array([0, 0, 0.42, 0, 0.4, 0, 0.24098, 0.051882]),
+                    "alpha_nom": np.array([-pip2, pip2, -pip2, -pip2, pip2, pip2, -pip2, -2.35023]),
+                    "num_joints": 7,
+                    "num_cam_extrinsic": 1}  # camera extrinsic calib
+
+        camera_params = {'camera_matrix': np.array([1359.7855224609375, 0.0, 964.5526733398438,
+                                                    0.0, 1357.134765625, 541.3818359375,
+                                                    0.0, 0.0, 1.0]).reshape(3, 3),
+                         'camera_distortion': np.zeros(5)}
+
+        aruco_params = {'arucoDict': cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_1000),
+                           'aruco_length': 0.128,
+                           'detector_params': cv2.aruco.DetectorParameters()}
+
+        charuco_params = {'arucoDict': cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250),
+                          'detector_params': cv2.aruco.CharucoParameters(),
+                          'refine_params': cv2.aruco.RefineParameters(),
+                          'squares_verically': 7,
+                          'squares_horizontally': 5,
+                          'square_length': 0.03,
+                          'marker_length': 0.015}
 
     assert dhparams['num_cam_extrinsic'] + dhparams['num_joints'] == len(dhparams['theta_nom']), ("Robot"
                           " MDH Configuration: stated number of joints does not match lenght of vector")
@@ -34,24 +86,6 @@ class RobotDescription:
                      [0, 0, 1, 0],
                      [0, 1, 0, 0.36],
                      [0, 0, 0, 1]])
-
-    camera_params = {'camera_matrix': np.array([1386.4138492513919, 0.0, 960.5,
-                                                    0.0, 1386.4138492513919, 540.5,
-                                                    0.0, 0.0, 1.0]).reshape(3, 3),
-                     'camera_distortion': np.zeros(5)}
-
-    aruco_params = {'arucoDict': cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_1000),
-                    'aruco_length': 0.4,
-                    'detector_params': cv2.aruco.DetectorParameters()}
-
-    charuco_params = {'arucoDict': cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250),
-                      'detector_params': cv2.aruco.CharucoParameters(),
-                      'refine_params': cv2.aruco.RefineParameters(),
-                      'squares_verically': 7,
-                      'squares_horizontally': 5,
-                      'square_length': 0.03,
-                      'marker_length': 0.015}
-
 
 
     def __init__(self):
@@ -304,6 +338,24 @@ class RobotDescription:
             # x-axis points to the right
             # y-axis points straight down towards your toes
             # z-axis points straight ahead away from your eye, out of the camera
+
+            for i, marker_id in enumerate(marker_ids.flatten()):
+                T_ = utils.H_rvec_tvec(rvecs[i][0], tvecs[i][0])  # convert to homogeneous matrix
+
+                # change base, as gazebo and cv use different camera directions:
+                # opencv: x-axis points to the right
+                #         y-axis points down
+                #         z-axis points out of the camera
+                # gazebo: x-axis points out of the camera
+                #         y-axis points to the left
+                #         z-axis points up
+                T_CM = RobotDescription.T_corr @ T_ @ np.linalg.inv(RobotDescription.T_corr)
+                est_poses.append({'mat': T_CM,
+                                  'marker_id': marker_id,
+                                  'from_frame': 'marker_' + str(marker_id),
+                                  'to_frame': 'camera'})
+
+
         elif marker_type == 'charuco':
             res = RobotDescription.charuco_params['chdetector'].detectBoard(img)
             charucoCorners, charucoIds, chmarkerCorners, chmarkerIds = res
@@ -315,25 +367,14 @@ class RobotDescription:
                                                                     RobotDescription.camera_params['camera_distortion'],
                                                                     rvec, tvec)
             if retval:
-                marker_ids = [1]
-            else:
-                marker_ids = []
+                T_ = utils.H_rvec_tvec(rvec, tvec)  # convert to homogeneous matrix
+                T_CM = RobotDescription.T_corr @ T_ @ np.linalg.inv(RobotDescription.T_corr)
+                est_poses.append({'mat': T_CM,
+                                  'marker_id': 1,
+                                  'from_frame': 'marker_1',
+                                  'to_frame': 'camera'})
 
-        for i, marker_id in enumerate(marker_ids.flatten()):
-            T_ = utils.H_rvec_tvec(rvecs[i][0], tvecs[i][0])  # convert to homogeneous matrix
 
-            # change base, as gazebo and cv use different camera directions:
-            # opencv: x-axis points to the right
-            #         y-axis points down
-            #         z-axis points out of the camera
-            # gazebo: x-axis points out of the camera
-            #         y-axis points to the left
-            #         z-axis points up
-            T_CM = RobotDescription.T_corr @ T_ @ np.linalg.inv(RobotDescription.T_corr)
-            est_poses.append({'mat': T_CM,
-                              'marker_id': marker_id,
-                              'from_frame': 'marker_'+str(marker_id),
-                              'to_frame': 'camera'})
         return est_poses
 
     @staticmethod

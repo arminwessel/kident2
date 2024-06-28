@@ -3,11 +3,13 @@ from pathlib import Path
 import datetime
 import pickle
 from da_test_suite_functions import latex_to_pdf
+import pandas as pd
 class ExperimentDataHandler:
 
     def __init__(self):
         self.figures = {}
         self.dataframes = {}
+        self.dataframes_pickle = {}
         self.notes = {}
         self.marker_locations = {}
 
@@ -16,6 +18,9 @@ class ExperimentDataHandler:
 
     def add_df(self, df, name):
         self.dataframes[name] = df
+
+    def add_df_to_pickle(self, df, name):
+        self.dataframes_pickle[name] = df
 
     def add_note(self, note_body, note_name):
         self.notes[note_name] = note_body
@@ -56,6 +61,11 @@ class ExperimentDataHandler:
 
             # as csv
             self.dataframes[name].to_csv(savepath.joinpath('data.csv'))
+
+        # save pickle
+        for name in self.dataframes_pickle:
+            pd.to_pickle(self.dataframes_pickle[name], savepath.joinpath(name + '.p'))
+
 
         # save marker locations
         for mlocation in self.marker_locations:

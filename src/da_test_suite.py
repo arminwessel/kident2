@@ -1,6 +1,7 @@
 import datetime
 
 import numpy as np
+import pandas as pd
 
 from da_test_suite_functions import *
 from exp_data_handler import *
@@ -146,6 +147,7 @@ def do_experiment(parameter_id_masks, errors, factor, observations_file_select, 
     exp_handler.add_note(f"{additional_info['jac_quality']['qr_diag_r_reduced_jacobian']}", "qr_diag")
     exp_handler.add_note(f"{np.sqrt(df_result['identification_accuracy'].pow(2).mean())}", 'residual_error_RMS')
     exp_handler.add_df(df_result, 'data')
+    exp_handler.add_df_to_pickle(df_obs_filt, "observations_filtered")
     # exp_handler.add_marker_location(list_marker_locations[-1], 'last_marker_locations')
     exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp')
 
@@ -172,6 +174,8 @@ parameter_id_masks['alpha'] =   [False, True, True, True, True, True, True, True
 observations_file_str_dict = {0:  r'observation_files/ground_truth_dataset.p',
                               1:  r'observation_files/obs_exp_26_04_001_2024-04-26-11-19-23_20240426-112528.p',
                               3:  r'observation_files/obs_exp_26_04_002_2024-04-26-12-06-53_20240426-123809.p',
+                              4:  r'observation_files/tu/obs_TU_meas_marker_stopping_20240624-212952.p',
+                              5:  r'observation_files/tu/obs_TU_meas_charuco_stopping_20240624-073525.p',
                               20: r'observation_files/obs_single_marker_2023-11-01-11-12-21_20240109-060457.p',
                               21: r'observation_files/observations_simulated_20240411_144805.p',
                               30: r'observation_files/meas_err/observations_simulated_errors__r_0.00000__t_0.00000.p',
@@ -205,14 +209,13 @@ observations_file_str_dict = {0:  r'observation_files/ground_truth_dataset.p',
                               88: r'observation_files/meas_err/observations_simulated_errors__r_0.00080__t_0.00080.p',
                               89: r'observation_files/meas_err/observations_simulated_errors__r_0.00090__t_0.00090.p'
                               }
-
-
+#from hundred_obs_file_str_dict import hundred_obs_file_str_dict
 
 # set maximal number of iterations
-num_iterations = 3
+num_iterations = 10
 
 # set filter threshold
-mal_threshold = 20
+mal_threshold = 15
 
 # tolerance to break loop
 residual_norm_tolerance = 1e-6
@@ -222,84 +225,21 @@ residual_norm_tolerance = 1e-6
 #         do_experiment(parameter_id_masks, factor, observations_file_select,
 #                       observations_file_str_dict, num_iterations, residual_norm_tolerance)
 
-bar_plot_data = {'magnitude': [], 'mean_distance': [], 'mean_distance_untrained': [], 'rms_residual': []}
+plot_data = []
+filename = []
+select_num = []
 errors = get_errors(len(parameter_id_masks['alpha']))
 
-for observations_file_select in [31, 32, 33, 34, 35, 36, 37, 38, 39]:
-    for factor in [0]:
+for observations_file_select in [5]:
+    for factor in [2]:
         ret = do_experiment(parameter_id_masks, errors, factor, observations_file_select,
                             observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)
-        bar_plot_data['magnitude'].append(observations_file_select % 10)
-        bar_plot_data['mean_distance'].append(ret['mean_distance']*1000)  # distance in mm
-        bar_plot_data['mean_distance_untrained'].append(ret['mean_distance_untrained']*1000)  # distance in mm
-        bar_plot_data['rms_residual'].append(ret['rms_residuals'])
-
-exp_handler = ExperimentDataHandler()
-
-fig_bar = plot_bar(bar_plot_data['magnitude'],
-                               "Dataset",
-                               "Mean Distance",
-                   bar_plot_data['mean_distance'])
-exp_handler.add_figure(fig_bar, 'bar_plots_dist')
-
-fig_bar = plot_bar(bar_plot_data['magnitude'],
-                               "Dataset",
-                               "RMS Residual",
-                   bar_plot_data['rms_residual'])
-exp_handler.add_figure(fig_bar, 'bar_plots_res')
-
-exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp/bar')
-
-##########################################################################
-bar_plot_data = {'magnitude': [], 'mean_distance': [], 'mean_distance_untrained': [], 'rms_residual': []}
-for observations_file_select in [61, 62, 63, 64, 65, 66, 67, 68, 69]:
-    for factor in [0]:
-        ret = do_experiment(parameter_id_masks, errors, factor, observations_file_select,
-                            observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)
-        bar_plot_data['magnitude'].append(observations_file_select % 10)
-        bar_plot_data['mean_distance'].append(ret['mean_distance']*1000)  # distance in mm
-        bar_plot_data['mean_distance_untrained'].append(ret['mean_distance_untrained'] * 1000)  # distance in mm
-        bar_plot_data['rms_residual'].append(ret['rms_residuals'])
-
-exp_handler = ExperimentDataHandler()
-
-fig_bar = plot_bar(bar_plot_data['magnitude'],
-                               "Dataset",
-                               "Mean Distance",
-                   bar_plot_data['mean_distance'])
-exp_handler.add_figure(fig_bar, 'bar_plots_dist')
-
-fig_bar = plot_bar(bar_plot_data['magnitude'],
-                               "Dataset",
-                               "RMS Residual",
-                   bar_plot_data['rms_residual'])
-exp_handler.add_figure(fig_bar, 'bar_plots_res')
-
-exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp/bar')
-
-##########################################################################
-bar_plot_data = {'magnitude': [], 'mean_distance': [], 'mean_distance_untrained': [], 'rms_residual': []}
-for observations_file_select in [81, 82, 83, 84, 85, 86, 87, 88, 89]:
-    for factor in [0]:
-        ret = do_experiment(parameter_id_masks, errors, factor, observations_file_select,
-                            observations_file_str_dict, num_iterations, residual_norm_tolerance, mal_threshold)
-        bar_plot_data['magnitude'].append(observations_file_select % 10)
-        bar_plot_data['mean_distance'].append(ret['mean_distance']*1000)  # distance in mm
-        bar_plot_data['mean_distance_untrained'].append(ret['mean_distance_untrained'] * 1000)  # distance in mm
-        bar_plot_data['rms_residual'].append(ret['rms_residuals'])
-
-exp_handler = ExperimentDataHandler()
-
-fig_bar = plot_bar(bar_plot_data['magnitude'],
-                               "Dataset",
-                               "Mean Distance",
-                   bar_plot_data['mean_distance'])
-exp_handler.add_figure(fig_bar, 'bar_plots_dist')
-
-fig_bar = plot_bar(bar_plot_data['magnitude'],
-                               "Dataset",
-                               "RMS Residual",
-                   bar_plot_data['rms_residual'])
-exp_handler.add_figure(fig_bar, 'bar_plots_res')
-
-exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp/bar')
+#         plot_data.append(ret['mean_distance_untrained'] * 1000)
+#         filename.append(observations_file_str_dict[observations_file_select])
+#         select_num.append(observations_file_select)
+#
+# exp_handler = ExperimentDataHandler()
+# exp_handler.add_note(f"plot_data: \n{plot_data}\n\n" +
+#                      f"filename: {filename}\n\n" +
+#                      f"selec_num: {select_num}\n\n", 'hundred_data')
+# exp_handler.save_experiment(r'/home/armin/catkin_ws/src/kident2/src/exp/hundred')

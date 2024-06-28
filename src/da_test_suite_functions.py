@@ -525,3 +525,4 @@ def plot_bar(labels, xlabel, ylabel, values):
     fig.tight_layout()
 
     return fig
+
